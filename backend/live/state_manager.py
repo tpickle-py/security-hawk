@@ -77,6 +77,14 @@ class StateManager:
                     },
                 )
 
+        # Evaluate correlated rules and publish synthetic sensors
+        try:
+            from rules.engine import rules_engine
+
+            await rules_engine.process_state_change(entity_id, new_state)
+        except Exception as e:
+            logger.debug("Rules evaluation failed for entity %s: %s", entity_id, e)
+
     async def get_placed_states(self, plan_id: str) -> dict[str, Any]:
         """Return current states for all placed entities on a plan."""
         from ha.registry import entity_registry

@@ -122,4 +122,3 @@ def validate_plan(data: dict) -> list[str]:
     if "buildings" in data and not isinstance(data["buildings"], list):
         errors.append("'buildings' must be a list")
     return errors
-

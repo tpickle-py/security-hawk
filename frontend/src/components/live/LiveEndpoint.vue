@@ -49,6 +49,9 @@ const iconHref = computed(() => {
   if (props.endpoint.type === "camera") {
     return "#icon-camera";
   }
+  if (props.endpoint.type === "composite") {
+    return isActive.value ? "#icon-composite-active" : "#icon-composite-clear";
+  }
   return "#icon-generic";
 });
 
@@ -175,6 +178,18 @@ function handleClick() {
       fill="rgba(245, 158, 11, 0.15)"
       stroke="rgba(245, 158, 11, 0.6)"
       stroke-width="1.5"
+    />
+
+    <!-- Composite rule active pulse ring -->
+    <circle
+      v-if="endpoint.type === 'composite' && isActive"
+      cx="0"
+      cy="0"
+      r="30"
+      class="motion-wave animate-pulse-glow"
+      fill="rgba(168, 85, 247, 0.2)"
+      stroke="rgba(239, 68, 68, 0.8)"
+      stroke-width="2"
     />
 
     <!-- Icon -->

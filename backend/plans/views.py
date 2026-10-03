@@ -304,4 +304,3 @@ def import_plan(request, plan_id=None):
             "migrated": was_migrated,
         }
     )
-

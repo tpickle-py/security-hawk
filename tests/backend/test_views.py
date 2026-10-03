@@ -17,7 +17,7 @@ class TestApiViews(SimpleTestCase):
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
-        assert data["version"] == "0.1.0"
+        assert data["version"] == "0.2.0"
 
     def test_list_plans(self) -> None:
         response = self.client.get("/api/plans/")

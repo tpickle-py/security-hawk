@@ -1,4 +1,4 @@
-export type EndpointType = "motion" | "door" | "window" | "camera" | "generic";
+export type EndpointType = "motion" | "door" | "window" | "camera" | "generic" | "composite";
 
 export interface ScalePoint {
   x: number;
@@ -161,5 +161,54 @@ export interface HAEntity {
   state?: string | null;
   device_class?: string | null;
   friendly_name?: string | null;
+}
+
+export interface RuleCondition {
+  entity_id: string;
+  state?: string;
+  attribute?: string;
+  operator?: "eq" | "neq" | "gt" | "lt";
+  value?: unknown;
+}
+
+export interface RuleServiceCall {
+  domain: string;
+  service: string;
+  service_data?: Record<string, unknown>;
+}
+
+export interface CompositeRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  logic: "ALL" | "ANY";
+  time_window_seconds: number;
+  reset_seconds: number;
+  device_class?: string;
+  output_entity_id?: string;
+  conditions: RuleCondition[];
+  linked_cameras?: string[];
+  service_call?: RuleServiceCall;
+}
+
+export interface MqttSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+  topic_prefix: string;
+  ha_discovery: boolean;
+}
+
+export interface AppSettings {
+  quiet_return_seconds: number;
+  auto_dismiss_camera_seconds: number;
+  default_view: "overview" | "floor";
+  mqtt: MqttSettings;
+  helpers: {
+    auto_register_synthetic_sensors: boolean;
+    prefix: string;
+  };
 }
 

@@ -31,7 +31,7 @@ def spa_view(request, *args, **kwargs):
 
 def health_check(request):
     """Simple health check endpoint."""
-    return JsonResponse({"status": "ok", "version": "0.1.0"})
+    return JsonResponse({"status": "ok", "version": "0.2.0"})
 
 
 urlpatterns = [
@@ -40,6 +40,8 @@ urlpatterns = [
     # API routes
     path("api/", include("plans.urls")),
     path("api/", include("ha.urls")),
+    path("api/", include("rules.urls")),
+    path("api/", include("settings_mgr.urls")),
     # Serve uploaded assets from DATA_DIR
     path(
         "assets/<path:path>",

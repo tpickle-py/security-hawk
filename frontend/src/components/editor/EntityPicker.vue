@@ -2,16 +2,24 @@
 import { ref, onMounted, computed } from "vue";
 import { useEntityStore } from "@/stores/entityStore";
 import { usePlanStore } from "@/stores/planStore";
-import type { HAEntity } from "@/types/plan";
+import type { CompositeRule, HAEntity } from "@/types/plan";
+import { api } from "@/services/api";
+import RuleBuilderModal from "@/components/editor/RuleBuilderModal.vue";
 
 const entityStore = useEntityStore();
 const planStore = usePlanStore();
 
 const query = ref("");
 const selectedDomain = ref("");
-const activeTab = ref<"all" | "unassigned">("all");
+const activeTab = ref<"all" | "unassigned" | "rules">("all");
 const selectedArea = ref("");
 const designatingEntityId = ref<string | null>(null);
+
+// Rules state
+const rules = ref<CompositeRule[]>([]);
+const isLoadingRules = ref(false);
+const showRuleBuilder = ref(false);
+const ruleToEdit = ref<CompositeRule | null>(null);
 
 const domains = [
   { label: "All", value: "" },
@@ -29,6 +37,10 @@ const placedEntityCounts = computed(() => {
 });
 
 function handleSearch() {
+  if (activeTab.value === "rules") {
+    // search filter handled in-memory for rules
+    return;
+  }
   entityStore.fetchEntities(
     query.value,
     selectedDomain.value,
@@ -48,9 +60,25 @@ function selectAreaFilter(e: Event) {
   handleSearch();
 }
 
-function toggleUnassignedTab(tab: "all" | "unassigned") {
+async function fetchRules() {
+  try {
+    isLoadingRules.value = true;
+    const res = await api.getRules();
+    rules.value = res.rules;
+  } catch (e) {
+    console.error("Failed to load rules", e);
+  } finally {
+    isLoadingRules.value = false;
+  }
+}
+
+function switchTab(tab: "all" | "unassigned" | "rules") {
   activeTab.value = tab;
-  handleSearch();
+  if (tab === "rules") {
+    fetchRules();
+  } else {
+    handleSearch();
+  }
 }
 
 async function handleDesignateArea(entityId: string, e: Event) {
@@ -74,10 +102,54 @@ function handleDragStart(e: DragEvent, entity: HAEntity) {
   e.dataTransfer.effectAllowed = "copy";
 }
 
+function handleRuleDragStart(e: DragEvent, rule: CompositeRule) {
+  if (!e.dataTransfer) return;
+  const targetEntityId = rule.output_entity_id || `binary_sensor.security_hawk_${rule.id}`;
+  const payload = {
+    entity_id: targetEntityId,
+    device_id: null,
+    label: rule.name,
+    type: "composite",
+  };
+  e.dataTransfer.setData("application/json", JSON.stringify(payload));
+  e.dataTransfer.effectAllowed = "copy";
+}
+
+function openCreateRule() {
+  ruleToEdit.value = null;
+  showRuleBuilder.value = true;
+}
+
+function openEditRule(rule: CompositeRule) {
+  ruleToEdit.value = rule;
+  showRuleBuilder.value = true;
+}
+
+async function deleteRule(ruleId: string) {
+  if (!confirm("Are you sure you want to delete this compound rule?")) return;
+  try {
+    await api.deleteRule(ruleId);
+    await fetchRules();
+  } catch (err: any) {
+    alert(err.message || "Failed to delete rule");
+  }
+}
+
+const filteredRules = computed(() => {
+  if (!query.value.trim()) return rules.value;
+  const q = query.value.toLowerCase();
+  return rules.value.filter(
+    (r) =>
+      r.name.toLowerCase().includes(q) ||
+      (r.output_entity_id && r.output_entity_id.toLowerCase().includes(q))
+  );
+});
+
 onMounted(async () => {
   await Promise.all([
     entityStore.fetchAreas(),
     entityStore.fetchEntities("", ""),
+    fetchRules(),
   ]);
 });
 </script>
@@ -89,23 +161,33 @@ onMounted(async () => {
       <div class="header-subtitle">Drag and drop to place on floor plan</div>
     </div>
 
-    <!-- Quick Tabs: All vs Unassigned Rooms -->
+    <!-- Quick Tabs: All vs Unassigned Rooms vs Rules -->
     <div class="unassigned-tab-bar">
       <button
         class="tab-btn"
         :class="{ active: activeTab === 'all' }"
-        @click="toggleUnassignedTab('all')"
+        @click="switchTab('all')"
       >
-        All Entities
+        All
       </button>
       <button
         class="tab-btn unassigned-btn"
         :class="{ active: activeTab === 'unassigned' }"
-        @click="toggleUnassignedTab('unassigned')"
+        @click="switchTab('unassigned')"
       >
         <span>Unassigned</span>
         <span class="count-pill" v-if="entityStore.unassignedCount > 0">
           {{ entityStore.unassignedCount }}
+        </span>
+      </button>
+      <button
+        class="tab-btn rules-tab-btn"
+        :class="{ active: activeTab === 'rules' }"
+        @click="switchTab('rules')"
+      >
+        <span>⚡ Rules</span>
+        <span class="count-pill rules-pill" v-if="rules.length > 0">
+          {{ rules.length }}
         </span>
       </button>
     </div>
@@ -118,13 +200,13 @@ onMounted(async () => {
       <input
         type="text"
         v-model="query"
-        placeholder="Search by friendly name, room..."
+        :placeholder="activeTab === 'rules' ? 'Search rules...' : 'Search by friendly name, room...'"
         @input="handleSearch"
       />
     </div>
 
-    <!-- Filter Row: Domains & Area Dropdown -->
-    <div class="filter-controls">
+    <!-- Filter Row: Domains & Area Dropdown (when not in rules tab) -->
+    <div class="filter-controls" v-if="activeTab !== 'rules'">
       <div class="domain-filters">
         <button
           v-for="d in domains"
@@ -147,8 +229,78 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Entity List -->
-    <div class="entity-list">
+    <!-- Rules Action Bar (when in rules tab) -->
+    <div class="rules-action-bar" v-else>
+      <button class="btn-create-rule" @click="openCreateRule">
+        <span>+</span> New Compound Rule
+      </button>
+    </div>
+
+    <!-- RULES VIEW -->
+    <div v-if="activeTab === 'rules'" class="entity-list">
+      <div v-if="isLoadingRules" class="list-state">Loading compound rules...</div>
+      <div v-else-if="filteredRules.length === 0" class="list-state">
+        <p>No compound rules created yet.</p>
+        <button class="btn-create-rule-empty" @click="openCreateRule">
+          Create Your First Rule
+        </button>
+      </div>
+
+      <div
+        v-for="rule in filteredRules"
+        :key="rule.id"
+        class="entity-item rule-item"
+        :class="{ placed: (placedEntityCounts.get(rule.output_entity_id || `binary_sensor.security_hawk_${rule.id}`) || 0) > 0 }"
+        draggable="true"
+        @dragstart="handleRuleDragStart($event, rule)"
+      >
+        <div class="entity-icon-badge rule-icon-badge">
+          <span>⚡</span>
+        </div>
+
+        <div class="entity-details">
+          <div class="entity-name" :title="rule.name">
+            {{ rule.name }}
+          </div>
+
+          <div class="entity-sub">
+            <span class="entity-id">{{ rule.output_entity_id || `binary_sensor.security_hawk_${rule.id}` }}</span>
+          </div>
+
+          <div class="rule-meta-row">
+            <span class="rule-cond-pill">
+              {{ rule.conditions?.length || 0 }} cond ({{ rule.logic }})
+            </span>
+            <span class="rule-cond-pill">
+              ⏱️ {{ rule.time_window_seconds }}s
+            </span>
+            <span v-if="rule.linked_cameras && rule.linked_cameras.length > 0" class="rule-cond-pill cam">
+              📹 {{ rule.linked_cameras.length }} cam
+            </span>
+          </div>
+
+          <div class="rule-actions-row">
+            <button class="rule-action-btn edit" @click.stop="openEditRule(rule)">
+              Edit
+            </button>
+            <button class="rule-action-btn del" @click.stop="deleteRule(rule.id)">
+              Delete
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="(placedEntityCounts.get(rule.output_entity_id || `binary_sensor.security_hawk_${rule.id}`) || 0) > 0"
+          class="placed-badge"
+          title="Placed on floor plan"
+        >
+          Placed
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTITY LIST (HA Physical Entities) -->
+    <div v-else class="entity-list">
       <div v-if="entityStore.isLoading" class="list-state">Loading entities...</div>
       <div v-else-if="entityStore.entities.length === 0" class="list-state">
         <span v-if="activeTab === 'unassigned'">All entities have been assigned to rooms! 🎉</span>
@@ -227,6 +379,14 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+
+    <!-- Rule Builder Modal Component -->
+    <RuleBuilderModal
+      :show="showRuleBuilder"
+      :ruleToEdit="ruleToEdit"
+      @close="showRuleBuilder = false"
+      @saved="fetchRules"
+    />
   </aside>
 </template>
 
@@ -485,5 +645,105 @@ onMounted(async () => {
   padding: 2px 6px;
   border-radius: var(--radius-full);
   margin-top: 2px;
+}
+
+.rules-pill {
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+
+.rules-action-bar {
+  padding: 0 16px 10px;
+}
+
+.btn-create-rule {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px dashed #8b5cf6;
+  color: #c4b5fd;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-create-rule:hover {
+  background: rgba(139, 92, 246, 0.35);
+  color: #ffffff;
+}
+
+.btn-create-rule-empty {
+  margin-top: 10px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rule-item {
+  border-left: 3px solid #8b5cf6;
+}
+
+.rule-icon-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+}
+
+.rule-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.rule-cond-pill {
+  font-size: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.rule-cond-pill.cam {
+  color: #818cf8;
+  border-color: rgba(129, 140, 248, 0.3);
+}
+
+.rule-actions-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.rule-action-btn {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.rule-action-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.rule-action-btn.del:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
 }
 </style>

@@ -22,6 +22,8 @@ const iconHref = computed(() => {
       return "#icon-window-closed";
     case "camera":
       return "#icon-camera";
+    case "composite":
+      return "#icon-composite-clear";
     default:
       return "#icon-generic";
   }

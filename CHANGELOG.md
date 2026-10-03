@@ -5,6 +5,15 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-03
+
+### Added
+- **Compound Rule Engine ("If X, Y, Z Then Do X")**: Complex multi-condition trigger engine supporting `ALL` (AND) and `ANY` (OR) logic, time-window event correlation (e.g. within 30s), auto-reset countdown timers back to `off`, and linked camera auto-popups.
+- **Native Home Assistant Synthetic Sensors**: Automatically creates and maintains synthetic sensors (`POST /api/states/<entity_id>`) in Home Assistant Core's state machine on demand without requiring YAML changes, custom integrations, or HA restarts.
+- **MQTT Information Store & Home Assistant MQTT Discovery**: Lightweight zero-dependency async MQTT 3.1.1 client that publishes state changes and automatic Home Assistant MQTT Discovery payloads (`homeassistant/binary_sensor/security_hawk_<rule_id>/config`) with retain support and authentication.
+- **Application & Integration Settings**: Dedicated Settings modal to configure automation behaviors (Quiet Return timeout, Camera Snapshot dismiss timeout, default startup view), MQTT broker parameters, and one-click Home Assistant synthetic helper registration.
+- **Canvas Synthetic / Composite Endpoints**: Rules and synthetic sensors can now be browsed, tested, and dragged directly from the "⚡ Rules" tab in EntityPicker onto the floor plan canvas as interactive `composite` endpoints with pulsing alert rings.
+
 ## [0.2.0] - 2026-10-03
 
 ### Added

@@ -108,6 +108,21 @@
         <circle cx="0" cy="0" r="16" fill="#1e293b" stroke="#64748b" stroke-width="2" />
         <circle cx="0" cy="0" r="6" fill="#6366f1" />
       </g>
+
+      <!-- Composite / Synthetic Rule Icon (Clear / Inactive) -->
+      <g id="icon-composite-clear">
+        <circle cx="0" cy="0" r="16" fill="#0f172a" stroke="#8b5cf6" stroke-width="2" />
+        <path d="M0 -8 L7 -4 L7 2 C7 6 0 10 0 10 C0 10 -7 6 -7 2 L-7 -4 Z" fill="none" stroke="#a78bfa" stroke-width="1.8" />
+        <path d="M1 -5 L-2 -1 L1 -1 L-1 5" fill="none" stroke="#c4b5fd" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      </g>
+
+      <!-- Composite / Synthetic Rule Icon (Active / Triggered) -->
+      <g id="icon-composite-active">
+        <circle cx="0" cy="0" r="19" fill="rgba(239, 68, 68, 0.25)" stroke="#ef4444" stroke-width="2.5" filter="url(#glow-danger)" />
+        <circle cx="0" cy="0" r="15" fill="#dc2626" />
+        <path d="M0 -8 L7 -4 L7 2 C7 6 0 10 0 10 C0 10 -7 6 -7 2 L-7 -4 Z" fill="#b91c1c" stroke="#ffffff" stroke-width="1.8" />
+        <path d="M1 -5 L-2 -1 L1 -1 L-1 5" fill="none" stroke="#fef08a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </g>
     </defs>
   </svg>
 </template>

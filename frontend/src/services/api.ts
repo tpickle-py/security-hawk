@@ -1,4 +1,4 @@
-import type { HAArea, HAEntity, Site } from "@/types/plan";
+import type { AppSettings, CompositeRule, HAArea, HAEntity, Site } from "@/types/plan";
 
 declare global {
   interface Window {
@@ -195,5 +195,61 @@ export const api = {
     const host = window.location.host;
     const pathPrefix = BASE_URL;
     return `${protocol}//${host}${pathPrefix}/ws/live/${planId}/`;
+  },
+
+  async getRules(): Promise<{ rules: CompositeRule[] }> {
+    const res = await fetch(`${BASE_URL}/api/rules/`);
+    if (!res.ok) throw new Error("Failed to load rules");
+    return res.json();
+  },
+
+  async saveRule(rule: Partial<CompositeRule>): Promise<{ status: string; rule: CompositeRule }> {
+    const res = await fetch(`${BASE_URL}/api/rules/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rule),
+    });
+    if (!res.ok) throw new Error("Failed to save rule");
+    return res.json();
+  },
+
+  async deleteRule(ruleId: string): Promise<{ status: string }> {
+    const res = await fetch(`${BASE_URL}/api/rules/${ruleId}/`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete rule");
+    return res.json();
+  },
+
+  async testRule(ruleId: string): Promise<{ status: string; triggered: boolean }> {
+    const res = await fetch(`${BASE_URL}/api/rules/${ruleId}/test/`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to test rule");
+    return res.json();
+  },
+
+  async getSettings(): Promise<{ settings: AppSettings }> {
+    const res = await fetch(`${BASE_URL}/api/settings/`);
+    if (!res.ok) throw new Error("Failed to load settings");
+    return res.json();
+  },
+
+  async saveSettings(settings: Partial<AppSettings>): Promise<{ status: string; settings: AppSettings }> {
+    const res = await fetch(`${BASE_URL}/api/settings/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) throw new Error("Failed to save settings");
+    return res.json();
+  },
+
+  async registerHAHelpers(): Promise<{ status: string; count: number; results: Array<{ rule_id: string; entity_id: string; ok: boolean }> }> {
+    const res = await fetch(`${BASE_URL}/api/settings/register_ha_helpers/`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to register HA helpers");
+    return res.json();
   },
 };

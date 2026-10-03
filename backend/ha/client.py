@@ -71,6 +71,40 @@ class HARestClient:
             content_type = resp.content_type or "image/jpeg"
             return await resp.read(), content_type
 
+    async def set_state(self, entity_id: str, state: str, attributes: dict | None = None) -> dict:
+        """Publish or update an entity state directly into Home Assistant Core.
+
+        Uses the HA REST API POST /api/states/<entity_id> endpoint.
+        If the entity does not exist, Home Assistant registers it dynamically.
+        """
+        payload = {"state": state, "attributes": attributes or {}}
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
+                f"{self.base_url}/states/{entity_id}",
+                headers=self.headers,
+                json=payload,
+            ) as resp,
+        ):
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def call_service(
+        self, domain: str, service: str, service_data: dict | None = None
+    ) -> list[dict]:
+        """Call a Home Assistant service (e.g. alarm_control_panel.alarm_trigger)."""
+        payload = service_data or {}
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
+                f"{self.base_url}/services/{domain}/{service}",
+                headers=self.headers,
+                json=payload,
+            ) as resp,
+        ):
+            resp.raise_for_status()
+            return await resp.json()
+
 
 class HAWebSocketClient:
     """Persistent WebSocket connection to HA Core for live state events.
