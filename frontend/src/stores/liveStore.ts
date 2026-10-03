@@ -20,6 +20,26 @@ export interface CameraPopupInfo {
   remainingSeconds: number;
 }
 
+export interface TraversalNode {
+  id: string;
+  endpointId: string;
+  entityId: string;
+  label: string;
+  x: number;
+  y: number;
+  timestamp: number;
+  sequenceIndex: number;
+  elapsedSeconds: number;
+}
+
+export interface TraversalTrail {
+  id: string;
+  floorId: string | null;
+  startTime: number;
+  lastUpdatedTime: number;
+  nodes: TraversalNode[];
+}
+
 export const useLiveStore = defineStore("live", () => {
   const isConnected = ref(false);
   const states = ref<Record<string, EntityState>>({});
@@ -157,6 +177,93 @@ export const useLiveStore = defineStore("live", () => {
     }, quietReturnSeconds.value * 1000);
   }
 
+  // Spatio-Temporal Motion Traversal Trail
+  const motionTrailsEnabled = ref(true);
+  const activeTrail = ref<TraversalTrail | null>(null);
+  const traversalWindowSeconds = ref(45);
+  let trailFadeTimer: number | null = null;
+
+  function toggleMotionTrails() {
+    motionTrailsEnabled.value = !motionTrailsEnabled.value;
+    if (!motionTrailsEnabled.value) {
+      activeTrail.value = null;
+    }
+  }
+
+  function clearMotionTrails() {
+    activeTrail.value = null;
+    if (trailFadeTimer) {
+      clearTimeout(trailFadeTimer);
+      trailFadeTimer = null;
+    }
+  }
+
+  function recordTraversalNode(
+    endpoint: { id: string; entity_id: string; label?: string; x: number; y: number },
+    floorId: string | null
+  ) {
+    if (!motionTrailsEnabled.value) return;
+
+    const now = Date.now();
+    const windowMs = traversalWindowSeconds.value * 1000;
+
+    if (trailFadeTimer) clearTimeout(trailFadeTimer);
+    trailFadeTimer = window.setTimeout(() => {
+      activeTrail.value = null;
+    }, windowMs);
+
+    if (
+      activeTrail.value &&
+      activeTrail.value.floorId === floorId &&
+      now - activeTrail.value.lastUpdatedTime <= windowMs
+    ) {
+      const nodes = activeTrail.value.nodes;
+      const lastNode = nodes[nodes.length - 1];
+
+      if (lastNode && lastNode.endpointId === endpoint.id && now - lastNode.timestamp < 2500) {
+        return;
+      }
+
+      const firstTime = nodes[0]?.timestamp || now;
+      const elapsedSec = Math.round((now - firstTime) / 1000);
+
+      nodes.push({
+        id: "tnode_" + Math.random().toString(36).substring(2, 8),
+        endpointId: endpoint.id,
+        entityId: endpoint.entity_id,
+        label: endpoint.label || endpoint.entity_id,
+        x: endpoint.x,
+        y: endpoint.y,
+        timestamp: now,
+        sequenceIndex: nodes.length + 1,
+        elapsedSeconds: elapsedSec,
+      });
+
+      activeTrail.value.lastUpdatedTime = now;
+      return;
+    }
+
+    activeTrail.value = {
+      id: "trail_" + Math.random().toString(36).substring(2, 8),
+      floorId,
+      startTime: now,
+      lastUpdatedTime: now,
+      nodes: [
+        {
+          id: "tnode_" + Math.random().toString(36).substring(2, 8),
+          endpointId: endpoint.id,
+          entityId: endpoint.entity_id,
+          label: endpoint.label || endpoint.entity_id,
+          x: endpoint.x,
+          y: endpoint.y,
+          timestamp: now,
+          sequenceIndex: 1,
+          elapsedSeconds: 0,
+        },
+      ],
+    };
+  }
+
   return {
     isConnected,
     states,
@@ -166,6 +273,9 @@ export const useLiveStore = defineStore("live", () => {
     highlightedEndpointId,
     activeCameraPopup,
     quietReturnSeconds,
+    motionTrailsEnabled,
+    activeTrail,
+    traversalWindowSeconds,
     setConnected,
     handleInitialStates,
     handleStateChange,
@@ -175,5 +285,8 @@ export const useLiveStore = defineStore("live", () => {
     dismissCameraPopup,
     toggleFollowActivity,
     resetQuietReturn,
+    toggleMotionTrails,
+    clearMotionTrails,
+    recordTraversalNode,
   };
 });

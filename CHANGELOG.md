@@ -27,7 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Linked Cameras Picker**: Direct binding of camera feeds to sensors for automatic live popups on detection.
   - **Stale RF Threshold Selector**: Configurable quiet duration (`1h`, `6h`, `12h`, `24h`, `3d`, `7d`, `30d`) before flagging battery sensors.
   - **Interactive Coverage FOV Controls**: Detection range (px/meters) and beam angle (15°–180°) sliders with real-time canvas preview.
-  - **Orphaned Entity Warning**: Identifies and flags entities missing or renamed in Home Assistant with canvas indicator badges and warning banners.
+- **Site Overview Building State Roll-Up (Spec §Views)**:
+  - Floating overview HUD and canvas markers summarizing structure health across all floors: door/window openings, active motion detections, and sensor totals.
+  - Interactive 1-click inspection jumping straight into any structure's active floor plan.
+- **Spatio-Temporal Motion Traversal Trails & Correlation**:
+  - Live breadcrumb engine correlating sequential sensor activations within a sliding window (45s) to reveal occupant movement from one end of the site to the other.
+  - Animated SVG flowing gradient trail (`#818cf8` -> `#06b6d4` -> `#f59e0b`) connecting triggered endpoints.
+  - Numbered checkpoint sequence badges (`#1`, `#2`, `#3`) with elapsed duration badges (`+0s`, `+5s`, `+14s`).
+  - Occupant lead pulse radar animation tracking current front-line movement.
+  - Live toolbar controls with toggle button (`〰️ Motion Trails`) and manual trail clearing.
 
 ## [0.2.0] - 2026-10-03
 

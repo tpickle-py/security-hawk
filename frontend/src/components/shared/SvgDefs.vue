@@ -32,6 +32,21 @@
         </feMerge>
       </filter>
 
+      <!-- Spatio-Temporal Motion Traversal Trail Gradient & Glow -->
+      <linearGradient id="motion-trail-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#818cf8" stop-opacity="0.85" />
+        <stop offset="50%" stop-color="#06b6d4" stop-opacity="0.95" />
+        <stop offset="100%" stop-color="#f59e0b" stop-opacity="1" />
+      </linearGradient>
+
+      <filter id="glow-trail" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+
       <!-- Motion Sensor Icon (Clear) -->
       <g id="icon-motion-clear">
         <circle cx="0" cy="0" r="16" fill="#1e293b" stroke="#64748b" stroke-width="2" />
