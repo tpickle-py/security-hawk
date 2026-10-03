@@ -5,6 +5,15 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Undo & Redo History**: In-memory 40-step action history with `Ctrl+Z` and `Ctrl+Y` / `Ctrl+Shift+Z` keyboard shortcuts and dedicated toolbar controls.
+- **Rolling Version History**: Automated 20-version rolling snapshot modal allowing instant one-click rollback to prior floor plan versions with pre-rollback safety snapshots.
+- **Floor Plan JSON Export & Import**: Direct file export (`/api/plans/<id>/export/`) and import (`/api/plans/import/` or `/api/plans/<id>/import/`) for local offline backups, templating, and staging tests.
+- **Automated Schema Migrations**: Robust versioned plan migration engine (`schema_version: 1 -> 2`) executing automatically during plan loading, saving, and importing to ensure backwards compatibility with nested shapes, sub-areas, and entity grouping.
+- **Architectural Wall & Room Drawing**: In-editor vector drawing tools with grid and vertex snapping (12px magnetic threshold), room polygon fill rendering, and customizable architectural text labels.
+
 ## [0.1.0] - 2026-10-03
 
 ### Added
