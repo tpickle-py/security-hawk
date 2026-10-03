@@ -83,3 +83,14 @@ async def test_rule(request: HttpRequest, rule_id: str) -> JsonResponse:
             "triggered_by": test_entities,
         }
     )
+
+
+def list_action_plugins(request: HttpRequest) -> JsonResponse:
+    """GET /api/rules/action-plugins/ to list available expandable action plugins."""
+    if request.method != "GET":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+
+    from rules.actions import action_registry
+
+    plugins = action_registry.list_plugins()
+    return JsonResponse({"plugins": plugins})

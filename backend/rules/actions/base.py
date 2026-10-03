@@ -1,9 +1,7 @@
-"""Base classes and context definitions for extensible Rule Action Plugins."""
-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)

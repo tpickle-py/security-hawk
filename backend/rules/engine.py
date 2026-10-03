@@ -16,6 +16,7 @@ from channels.layers import get_channel_layer
 from ha.client import HARestClient
 from ha.mqtt import LightweightMqttClient
 from ha.registry import entity_registry
+from rules.actions import ActionContext, action_registry
 from rules.storage import rules_storage
 from settings_mgr.storage import settings_storage
 
@@ -149,17 +150,24 @@ class RulesEngine:
             except Exception as e:
                 logger.debug("Failed to publish MQTT state: %s", e)
 
-        # 3. Optional HA service call (e.g. alarm trigger or siren)
-        svc = rule.get("service_call")
-        if svc and isinstance(svc, dict) and svc.get("domain") and svc.get("service"):
-            try:
-                await self._ha_client.call_service(
-                    domain=svc["domain"],
-                    service=svc["service"],
-                    service_data=svc.get("data", {}),
-                )
-            except Exception as e:
-                logger.warning("Failed to call service for rule '%s': %s", rule_name, e)
+        # 3. Execute pluggable and expandable actions (HA service, Email, WhatsApp, Webhook)
+        action_ctx = ActionContext(
+            rule_id=rule_id,
+            rule_name=rule_name,
+            triggered_by=triggering_entities,
+            time_epoch=time.time(),
+            output_entity_id=output_eid,
+            extra={"device_class": device_class, "attributes": attributes},
+        )
+        actions = rule.get("actions") or []
+        try:
+            await action_registry.execute_actions(
+                actions=actions,
+                context=action_ctx,
+                legacy_service_call=rule.get("service_call"),
+            )
+        except Exception as e:
+            logger.error("Error executing actions for rule '%s': %s", rule_name, e)
 
         # 4. Broadcast state update to connected frontend floor plans
         channel_layer = get_channel_layer()

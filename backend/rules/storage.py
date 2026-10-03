@@ -64,6 +64,7 @@ class RulesStorage:
         rule_data.setdefault("reset_seconds", 60)
         rule_data.setdefault("device_class", "safety")
         rule_data.setdefault("conditions", [])
+        rule_data.setdefault("actions", [])
         rule_data.setdefault("linked_cameras", [])
 
         idx = next((i for i, r in enumerate(rules) if r.get("id") == rule_id), None)

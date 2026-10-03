@@ -177,6 +177,31 @@ export interface RuleServiceCall {
   service_data?: Record<string, unknown>;
 }
 
+export interface ActionPluginField {
+  name: string;
+  label: string;
+  type: "text" | "number" | "password" | "textarea" | "select" | "json";
+  required?: boolean;
+  placeholder?: string;
+  default?: unknown;
+  options?: Array<{ label: string; value: string }>;
+}
+
+export interface ActionPlugin {
+  type: string;
+  name: string;
+  description: string;
+  icon: string;
+  fields: ActionPluginField[];
+}
+
+export interface RuleAction {
+  id?: string;
+  type: string;
+  config: Record<string, any>;
+  enabled?: boolean;
+}
+
 export interface CompositeRule {
   id: string;
   name: string;
@@ -187,6 +212,7 @@ export interface CompositeRule {
   device_class?: string;
   output_entity_id?: string;
   conditions: RuleCondition[];
+  actions?: RuleAction[];
   linked_cameras?: string[];
   service_call?: RuleServiceCall;
 }
@@ -201,6 +227,30 @@ export interface MqttSettings {
   ha_discovery: boolean;
 }
 
+export interface EmailSettings {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from?: string;
+  default_to?: string;
+  smtp_use_tls?: boolean;
+}
+
+export interface WhatsAppSettings {
+  provider?: string;
+  default_phone?: string;
+  api_key?: string;
+  account_sid?: string;
+  from_phone?: string;
+  webhook_url?: string;
+}
+
+export interface NotificationSettings {
+  email?: EmailSettings;
+  whatsapp?: WhatsAppSettings;
+}
+
 export interface AppSettings {
   quiet_return_seconds: number;
   auto_dismiss_camera_seconds: number;
@@ -210,5 +260,6 @@ export interface AppSettings {
     auto_register_synthetic_sensors: boolean;
     prefix: string;
   };
+  notifications?: NotificationSettings;
 }
 

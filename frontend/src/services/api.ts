@@ -1,4 +1,4 @@
-import type { AppSettings, CompositeRule, HAArea, HAEntity, Site } from "@/types/plan";
+import type { ActionPlugin, AppSettings, CompositeRule, HAArea, HAEntity, Site } from "@/types/plan";
 
 declare global {
   interface Window {
@@ -200,6 +200,12 @@ export const api = {
   async getRules(): Promise<{ rules: CompositeRule[] }> {
     const res = await fetch(`${BASE_URL}/api/rules/`);
     if (!res.ok) throw new Error("Failed to load rules");
+    return res.json();
+  },
+
+  async getActionPlugins(): Promise<{ plugins: ActionPlugin[] }> {
+    const res = await fetch(`${BASE_URL}/api/rules/action-plugins/`);
+    if (!res.ok) throw new Error("Failed to load action plugins");
     return res.json();
   },
 

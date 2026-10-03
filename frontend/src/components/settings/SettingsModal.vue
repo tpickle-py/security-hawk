@@ -12,7 +12,7 @@ const emit = defineEmits<{
   (e: "saved", settings: AppSettings): void;
 }>();
 
-const activeTab = ref<"behaviors" | "mqtt" | "helpers">("behaviors");
+const activeTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications">("behaviors");
 
 const quietReturnSeconds = ref(120);
 const autoDismissCameraSeconds = ref(30);
@@ -30,6 +30,21 @@ const mqttHaDiscovery = ref(true);
 // Helpers
 const autoRegisterSynthetic = ref(true);
 const helperPrefix = ref("security_hawk_");
+
+// Notification Defaults
+const emailHost = ref("");
+const emailPort = ref(587);
+const emailUser = ref("");
+const emailPassword = ref("");
+const emailFrom = ref("");
+const emailDefaultTo = ref("");
+const emailUseTls = ref(true);
+
+const waProvider = ref("callmebot");
+const waDefaultPhone = ref("");
+const waApiKey = ref("");
+const waAccountSid = ref("");
+const waFromPhone = ref("");
 
 const isLoading = ref(false);
 const isSaving = ref(false);
@@ -63,6 +78,23 @@ watch(
 
         autoRegisterSynthetic.value = s.helpers?.auto_register_synthetic_sensors ?? true;
         helperPrefix.value = s.helpers?.prefix || "security_hawk_";
+
+        const notifs = s.notifications || {};
+        const em = notifs.email || {};
+        emailHost.value = em.smtp_host || "";
+        emailPort.value = em.smtp_port || 587;
+        emailUser.value = em.smtp_user || "";
+        emailPassword.value = em.smtp_password || "";
+        emailFrom.value = em.smtp_from || "";
+        emailDefaultTo.value = em.default_to || "";
+        emailUseTls.value = em.smtp_use_tls ?? true;
+
+        const wa = notifs.whatsapp || {};
+        waProvider.value = wa.provider || "callmebot";
+        waDefaultPhone.value = wa.default_phone || "";
+        waApiKey.value = wa.api_key || "";
+        waAccountSid.value = wa.account_sid || "";
+        waFromPhone.value = wa.from_phone || "";
       } catch (err: any) {
         errorMessage.value = err.message || "Failed to load settings.";
       } finally {
@@ -95,6 +127,24 @@ async function handleSave() {
       helpers: {
         auto_register_synthetic_sensors: autoRegisterSynthetic.value,
         prefix: helperPrefix.value.trim(),
+      },
+      notifications: {
+        email: {
+          smtp_host: emailHost.value.trim(),
+          smtp_port: Number(emailPort.value),
+          smtp_user: emailUser.value.trim(),
+          smtp_password: emailPassword.value,
+          smtp_from: emailFrom.value.trim(),
+          default_to: emailDefaultTo.value.trim(),
+          smtp_use_tls: emailUseTls.value,
+        },
+        whatsapp: {
+          provider: waProvider.value,
+          default_phone: waDefaultPhone.value.trim(),
+          api_key: waApiKey.value.trim(),
+          account_sid: waAccountSid.value.trim(),
+          from_phone: waFromPhone.value.trim(),
+        },
       },
     };
 
@@ -168,6 +218,14 @@ async function handleSyncHelpers() {
           @click="activeTab = 'helpers'"
         >
           <span class="tab-icon">✨</span> HA Helpers & Entities
+        </button>
+        <button
+          type="button"
+          class="nav-tab"
+          :class="{ active: activeTab === 'notifications' }"
+          @click="activeTab = 'notifications'"
+        >
+          <span class="tab-icon">🔔</span> Notification Defaults
         </button>
       </div>
 
@@ -353,6 +411,95 @@ async function handleSyncHelpers() {
                     <span>{{ r.ok ? '✓' : '✕' }}</span>
                     <code>{{ r.entity_id }}</code>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: NOTIFICATION DEFAULTS (EMAIL & WHATSAPP) -->
+          <div v-if="activeTab === 'notifications'" class="tab-content">
+            <div class="form-section">
+              <div class="section-title">Notification & Action Defaults</div>
+              <p class="section-desc">
+                Configure default credentials for expandable action plugins. When rules trigger, action plugins (Email, WhatsApp) will use these credentials automatically unless overridden.
+              </p>
+
+              <!-- Email (SMTP) Defaults -->
+              <div class="notif-block">
+                <div class="notif-block-header">
+                  <span class="notif-icon">✉️</span>
+                  <strong>Email (SMTP) Credentials</strong>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group flex-2">
+                    <label>SMTP Host</label>
+                    <input v-model="emailHost" type="text" placeholder="smtp.gmail.com or mail.local" />
+                  </div>
+                  <div class="form-group flex-1">
+                    <label>Port</label>
+                    <input v-model.number="emailPort" type="number" placeholder="587" />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group flex-1">
+                    <label>Username</label>
+                    <input v-model="emailUser" type="text" placeholder="alerts@mydomain.com" />
+                  </div>
+                  <div class="form-group flex-1">
+                    <label>Password</label>
+                    <input v-model="emailPassword" type="password" placeholder="••••••••" />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group flex-1">
+                    <label>From Address</label>
+                    <input v-model="emailFrom" type="text" placeholder="security-hawk@mydomain.com" />
+                  </div>
+                  <div class="form-group flex-1">
+                    <label>Default Recipient (To)</label>
+                    <input v-model="emailDefaultTo" type="text" placeholder="admin@mydomain.com" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" v-model="emailUseTls" />
+                    <span>Use TLS / STARTTLS Encryption (Default for Port 587)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- WhatsApp Defaults -->
+              <div class="notif-block">
+                <div class="notif-block-header">
+                  <span class="notif-icon">💬</span>
+                  <strong>WhatsApp Messenger Defaults</strong>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group flex-1">
+                    <label>Provider</label>
+                    <select v-model="waProvider">
+                      <option value="callmebot">CallMeBot (Free & Simple for HA)</option>
+                      <option value="custom_webhook">Custom Gateway / Webhook</option>
+                      <option value="twilio">Twilio WhatsApp</option>
+                    </select>
+                  </div>
+                  <div class="form-group flex-1">
+                    <label>Default Recipient Phone</label>
+                    <input v-model="waDefaultPhone" type="text" placeholder="+14155552671" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>API Key / Token</label>
+                  <input v-model="waApiKey" type="password" placeholder="CallMeBot API Key or Twilio Auth Token" />
+                  <span class="field-hint">
+                    For CallMeBot, send WhatsApp message: <code>I allow callmebot to send me messages</code> to <code>+34 644 44 44 44</code> to receive your free key.
+                  </span>
                 </div>
               </div>
             </div>
@@ -755,5 +902,29 @@ async function handleSyncHelpers() {
 .btn-secondary:hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.1);
+}
+
+.notif-block {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notif-block-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 6px;
+}
+
+.notif-icon {
+  font-size: 16px;
 }
 </style>

@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Compound Rule Engine ("If X, Y, Z Then Do X")**: Complex multi-condition trigger engine supporting `ALL` (AND) and `ANY` (OR) logic, time-window event correlation (e.g. within 30s), auto-reset countdown timers back to `off`, and linked camera auto-popups.
-- **Native Home Assistant Synthetic Sensors**: Automatically creates and maintains synthetic sensors (`POST /api/states/<entity_id>`) in Home Assistant Core's state machine on demand without requiring YAML changes, custom integrations, or HA restarts.
+- **Expandable Action Plugins Architecture**: Pluggable action framework allowing rules to trigger multiple actions simultaneously with dynamic UI schema rendering:
+  - **Home Assistant Service (`ha_service`)**: Call native HA services (`alarm_control_panel.alarm_trigger`, `notify`, `light.turn_on`, sirens).
+  - **Email Notification (`email`)**: Send formatted SMTP alert emails with variable interpolation (`{rule_name}`, `{entities}`) and TLS encryption.
+  - **WhatsApp Messages (`whatsapp`)**: Dispatch instant WhatsApp alerts via CallMeBot (free for HA), Twilio API, or custom webhook gateways.
+  - **Custom Webhook / HTTP (`webhook`)**: Send HTTP POST/GET requests with custom JSON payloads and headers to external endpoints (Discord, Slack, automation servers).
+  - **Global Notification Defaults**: Settings page tab for global SMTP and WhatsApp credentials, automatically inherited by rules.
 - **MQTT Information Store & Home Assistant MQTT Discovery**: Lightweight zero-dependency async MQTT 3.1.1 client that publishes state changes and automatic Home Assistant MQTT Discovery payloads (`homeassistant/binary_sensor/security_hawk_<rule_id>/config`) with retain support and authentication.
 - **Application & Integration Settings**: Dedicated Settings modal to configure automation behaviors (Quiet Return timeout, Camera Snapshot dismiss timeout, default startup view), MQTT broker parameters, and one-click Home Assistant synthetic helper registration.
 - **Canvas Synthetic / Composite Endpoints**: Rules and synthetic sensors can now be browsed, tested, and dragged directly from the "⚡ Rules" tab in EntityPicker onto the floor plan canvas as interactive `composite` endpoints with pulsing alert rings.

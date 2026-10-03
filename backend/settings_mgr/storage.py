@@ -28,6 +28,24 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "auto_register_synthetic_sensors": True,
         "prefix": "security_hawk_",
     },
+    "notifications": {
+        "email": {
+            "smtp_host": "",
+            "smtp_port": 587,
+            "smtp_user": "",
+            "smtp_password": "",
+            "smtp_from": "",
+            "default_to": "",
+            "smtp_use_tls": True,
+        },
+        "whatsapp": {
+            "provider": "callmebot",
+            "default_phone": "",
+            "api_key": "",
+            "account_sid": "",
+            "from_phone": "",
+        },
+    },
 }
 
 

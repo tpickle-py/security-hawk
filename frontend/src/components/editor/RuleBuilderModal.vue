@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
-import type { CompositeRule, RuleCondition } from "@/types/plan";
+import type { ActionPlugin, CompositeRule, RuleAction, RuleCondition } from "@/types/plan";
 import { api } from "@/services/api";
 import { useEntityStore } from "@/stores/entityStore";
 
@@ -25,11 +25,10 @@ const resetSeconds = ref(60);
 const deviceClass = ref("safety");
 const outputEntityId = ref("");
 const conditions = ref<RuleCondition[]>([]);
+const actions = ref<RuleAction[]>([]);
+const actionPlugins = ref<ActionPlugin[]>([]);
+const selectedNewPlugin = ref("ha_service");
 const linkedCameras = ref<string[]>([]);
-const hasServiceCall = ref(false);
-const serviceDomain = ref("alarm_control_panel");
-const serviceName = ref("alarm_trigger");
-const serviceDataJson = ref("{}");
 
 const isSaving = ref(false);
 const isTesting = ref(false);
@@ -39,6 +38,59 @@ const errorMessage = ref<string | null>(null);
 const availableCameras = computed(() => {
   return entityStore.entities.filter((e) => e.domain === "camera" || entityStore.guessEndpointType(e) === "camera");
 });
+
+async function loadPlugins() {
+  try {
+    const res = await api.getActionPlugins();
+    actionPlugins.value = res.plugins;
+    if (res.plugins.length > 0 && !selectedNewPlugin.value) {
+      selectedNewPlugin.value = res.plugins[0].type;
+    }
+  } catch (e) {
+    console.error("Failed to load action plugins", e);
+  }
+}
+
+function getPluginDef(type: string): ActionPlugin | undefined {
+  return actionPlugins.value.find((p) => p.type === type);
+}
+
+function addAction(pluginType?: string) {
+  const pType = pluginType || selectedNewPlugin.value || "ha_service";
+  const plugin = getPluginDef(pType);
+  const initialConfig: Record<string, any> = {};
+  if (plugin) {
+    for (const f of plugin.fields) {
+      if (f.default !== undefined) {
+        initialConfig[f.name] = f.default;
+      }
+    }
+  }
+  actions.value.push({
+    id: `act_${Math.random().toString(36).substring(2, 9)}`,
+    type: pType,
+    config: initialConfig,
+    enabled: true,
+  });
+}
+
+function removeAction(index: number) {
+  actions.value.splice(index, 1);
+}
+
+function onActionPluginChange(act: RuleAction, newType: string) {
+  act.type = newType;
+  const plugin = getPluginDef(newType);
+  const newConfig: Record<string, any> = {};
+  if (plugin) {
+    for (const f of plugin.fields) {
+      if (f.default !== undefined) {
+        newConfig[f.name] = f.default;
+      }
+    }
+  }
+  act.config = newConfig;
+}
 
 function slugify(text: string): string {
   return text
@@ -56,10 +108,12 @@ function updateSlug() {
 
 watch(
   () => props.show,
-  (isShowing) => {
+  async (isShowing) => {
     if (isShowing) {
       testResult.value = null;
       errorMessage.value = null;
+      await loadPlugins();
+
       if (props.ruleToEdit) {
         ruleId.value = props.ruleToEdit.id;
         name.value = props.ruleToEdit.name;
@@ -71,14 +125,25 @@ watch(
         outputEntityId.value = props.ruleToEdit.output_entity_id || "";
         conditions.value = JSON.parse(JSON.stringify(props.ruleToEdit.conditions || []));
         linkedCameras.value = [...(props.ruleToEdit.linked_cameras || [])];
-        if (props.ruleToEdit.service_call) {
-          hasServiceCall.value = true;
-          serviceDomain.value = props.ruleToEdit.service_call.domain || "";
-          serviceName.value = props.ruleToEdit.service_call.service || "";
-          serviceDataJson.value = JSON.stringify(props.ruleToEdit.service_call.service_data || {}, null, 2);
-        } else {
-          hasServiceCall.value = false;
+
+        const existingActions: RuleAction[] = JSON.parse(JSON.stringify(props.ruleToEdit.actions || []));
+        // Backwards compatibility with legacy service_call
+        if (existingActions.length === 0 && props.ruleToEdit.service_call) {
+          const sc = props.ruleToEdit.service_call;
+          if (sc.domain && sc.service) {
+            existingActions.push({
+              id: `act_${Math.random().toString(36).substring(2, 9)}`,
+              type: "ha_service",
+              config: {
+                domain: sc.domain,
+                service: sc.service,
+                data: sc.service_data || {},
+              },
+              enabled: true,
+            });
+          }
         }
+        actions.value = existingActions;
       } else {
         ruleId.value = "";
         name.value = "";
@@ -92,11 +157,8 @@ watch(
           { entity_id: "", state: "on" },
           { entity_id: "", state: "on" },
         ];
+        actions.value = [];
         linkedCameras.value = [];
-        hasServiceCall.value = false;
-        serviceDomain.value = "alarm_control_panel";
-        serviceName.value = "alarm_trigger";
-        serviceDataJson.value = "{}";
       }
     }
   },
@@ -127,23 +189,27 @@ async function handleSave() {
     }
   }
 
-  let serviceCallObj = undefined;
-  if (hasServiceCall.value && serviceDomain.value && serviceName.value) {
-    let parsedData = {};
-    try {
-      if (serviceDataJson.value.trim()) {
-        parsedData = JSON.parse(serviceDataJson.value);
+  // Format actions (parse JSON string inputs if user entered JSON string)
+  const formattedActions = actions.value.map((act) => {
+    const cleanConfig = { ...act.config };
+    for (const [k, v] of Object.entries(cleanConfig)) {
+      if (typeof v === "string" && (k === "data" || k === "payload" || k === "headers")) {
+        try {
+          if (v.trim().startsWith("{") || v.trim().startsWith("[")) {
+            cleanConfig[k] = JSON.parse(v);
+          }
+        } catch {
+          // Keep string if not valid json
+        }
       }
-    } catch {
-      errorMessage.value = "Invalid JSON in service call parameters.";
-      return;
     }
-    serviceCallObj = {
-      domain: serviceDomain.value.trim(),
-      service: serviceName.value.trim(),
-      service_data: parsedData,
+    return {
+      id: act.id,
+      type: act.type,
+      config: cleanConfig,
+      enabled: act.enabled !== false,
     };
-  }
+  });
 
   const payload: Partial<CompositeRule> = {
     id: ruleId.value || undefined,
@@ -155,8 +221,8 @@ async function handleSave() {
     device_class: deviceClass.value,
     output_entity_id: outputEntityId.value.trim() || undefined,
     conditions: conditions.value,
+    actions: formattedActions,
     linked_cameras: linkedCameras.value,
-    service_call: serviceCallObj,
   };
 
   try {
@@ -425,32 +491,129 @@ async function handleTest() {
             </div>
           </div>
 
-          <!-- Optional HA Service Call -->
-          <div class="service-call-section">
-            <label class="checkbox-inline">
-              <input type="checkbox" v-model="hasServiceCall" />
-              <span>Call Home Assistant Service when triggered (e.g. alarm trigger, sirens, lights)</span>
-            </label>
-
-            <div v-if="hasServiceCall" class="service-fields">
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label>Domain</label>
-                  <input v-model="serviceDomain" type="text" placeholder="alarm_control_panel" />
-                </div>
-                <div class="form-group flex-1">
-                  <label>Service</label>
-                  <input v-model="serviceName" type="text" placeholder="alarm_trigger" />
-                </div>
+          <!-- Expandable Action Plugins (THEN...) -->
+          <div class="actions-section">
+            <div class="section-title-row">
+              <div class="section-title">Automations & Notification Actions</div>
+              <div class="add-action-controls">
+                <select v-model="selectedNewPlugin" class="plugin-select-dropdown">
+                  <option v-for="p in actionPlugins" :key="p.type" :value="p.type">
+                    {{ p.name }}
+                  </option>
+                </select>
+                <button type="button" class="btn-sm btn-secondary" @click="addAction()">
+                  + Add Action
+                </button>
               </div>
-              <div class="form-group">
-                <label>Service Data (JSON)</label>
-                <textarea
-                  v-model="serviceDataJson"
-                  rows="2"
-                  placeholder='{"code": "1234"}'
-                  class="code-textarea"
-                ></textarea>
+            </div>
+
+            <div v-if="actions.length === 0" class="empty-actions-box">
+              <span>No notification actions configured. The synthetic sensor state and live camera popup will still trigger. Add an action above to send Email, WhatsApp messages, call Home Assistant services, or trigger webhooks.</span>
+            </div>
+
+            <div v-else class="actions-list">
+              <div
+                v-for="(act, actIdx) in actions"
+                :key="act.id || actIdx"
+                class="action-card"
+                :class="{ disabled: act.enabled === false }"
+              >
+                <!-- Action Card Header -->
+                <div class="action-card-header">
+                  <div class="action-header-left">
+                    <span class="action-icon">
+                      {{ act.type === 'ha_service' ? '🏠' : act.type === 'email' ? '✉️' : act.type === 'whatsapp' ? '💬' : '🌐' }}
+                    </span>
+                    <select
+                      :value="act.type"
+                      class="action-type-select"
+                      @change="onActionPluginChange(act, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="p in actionPlugins" :key="p.type" :value="p.type">
+                        {{ p.name }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="action-header-right">
+                    <label class="toggle-switch-sm">
+                      <input type="checkbox" v-model="act.enabled" />
+                      <span class="switch-label">{{ act.enabled !== false ? 'Enabled' : 'Disabled' }}</span>
+                    </label>
+                    <button
+                      type="button"
+                      class="remove-cond-btn"
+                      title="Remove action"
+                      @click="removeAction(actIdx)"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Action Dynamic Fields -->
+                <div class="action-card-body" v-if="getPluginDef(act.type)">
+                  <div
+                    v-for="field in getPluginDef(act.type)!.fields"
+                    :key="field.name"
+                    class="form-group"
+                  >
+                    <label>
+                      {{ field.label }}
+                      <span v-if="field.required" class="required-star">*</span>
+                    </label>
+
+                    <!-- Text / Password -->
+                    <input
+                      v-if="field.type === 'text' || field.type === 'password'"
+                      :type="field.type"
+                      v-model="act.config[field.name]"
+                      :placeholder="field.placeholder"
+                    />
+
+                    <!-- Number -->
+                    <input
+                      v-else-if="field.type === 'number'"
+                      type="number"
+                      v-model.number="act.config[field.name]"
+                      :placeholder="field.placeholder"
+                    />
+
+                    <!-- Select -->
+                    <select
+                      v-else-if="field.type === 'select'"
+                      v-model="act.config[field.name]"
+                    >
+                      <option
+                        v-for="opt in field.options"
+                        :key="opt.value"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </option>
+                    </select>
+
+                    <!-- Textarea -->
+                    <textarea
+                      v-else-if="field.type === 'textarea'"
+                      rows="2"
+                      v-model="act.config[field.name]"
+                      :placeholder="field.placeholder"
+                    ></textarea>
+
+                    <!-- JSON -->
+                    <textarea
+                      v-else-if="field.type === 'json'"
+                      rows="2"
+                      :value="typeof act.config[field.name] === 'object' ? JSON.stringify(act.config[field.name], null, 2) : act.config[field.name]"
+                      @input="act.config[field.name] = ($event.target as HTMLTextAreaElement).value"
+                      :placeholder="field.placeholder"
+                      class="code-textarea"
+                    ></textarea>
+                  </div>
+                  <div class="template-hint">
+                    💡 Supports template variables: <code>{rule_name}</code>, <code>{entities}</code>, <code>{output_entity_id}</code>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -862,5 +1025,132 @@ async function handleTest() {
 .muted-text {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.actions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.add-action-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-select-dropdown {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+}
+
+.empty-actions-box {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.action-card.disabled {
+  opacity: 0.6;
+  border-left-color: #64748b;
+}
+
+.action-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.action-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-icon {
+  font-size: 15px;
+}
+
+.action-type-select {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+}
+
+.action-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-switch-sm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.switch-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.action-card-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.required-star {
+  color: var(--color-danger);
+  margin-left: 2px;
+}
+
+.template-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  margin-top: 2px;
+}
+
+.template-hint code {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 1px 4px;
+  border-radius: 2px;
 }
 </style>
