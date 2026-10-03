@@ -1,0 +1,40 @@
+name: "Security Hawk"
+version: "0.1.0"
+slug: "security_hawk"
+description: "Floor plan viewer with live sensor and camera state"
+url: "https://github.com/tpickle/security-hawk"
+
+arch:
+  - amd64
+  - aarch64
+
+startup: application
+boot: auto
+
+# Ingress (editor UI behind HA auth)
+ingress: true
+ingress_port: 8099
+
+# Direct kiosk port (Route B)
+ports:
+  8100/tcp: null
+ports_description:
+  8100/tcp: "Kiosk page (direct access for TV)"
+
+# HA API access
+homeassistant_api: true
+
+# User-configurable options
+options:
+  kiosk_enabled: false
+  kiosk_port: 8100
+  kiosk_token: ""
+  default_view: "overview"
+  quiet_return_seconds: 120
+
+schema:
+  kiosk_enabled: bool
+  kiosk_port: port
+  kiosk_token: str
+  default_view: "list(overview|floor)"
+  quiet_return_seconds: int
