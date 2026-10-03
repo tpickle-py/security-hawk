@@ -108,3 +108,18 @@ def suggest_endpoint_type(domain: str, device_class: str | None = None) -> str:
             return "door"
 
     return "generic"
+
+
+def validate_plan(data: dict) -> list[str]:
+    """Validate a plan data dictionary. Returns a list of error messages (empty if valid)."""
+    errors = []
+    if not isinstance(data, dict):
+        return ["Plan must be a JSON object"]
+    if "name" not in data or not isinstance(data["name"], str):
+        errors.append("Plan must have a 'name' string")
+    if "overview" in data and not isinstance(data["overview"], dict):
+        errors.append("'overview' must be an object")
+    if "buildings" in data and not isinstance(data["buildings"], list):
+        errors.append("'buildings' must be a list")
+    return errors
+

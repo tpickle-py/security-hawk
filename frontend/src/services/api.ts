@@ -108,6 +108,28 @@ export const api = {
     return res.json();
   },
 
+  getExportUrl(planId: string): string {
+    return `${BASE_URL}/api/plans/${planId}/export/`;
+  },
+
+  async importPlan(
+    file: File,
+    planId?: string
+  ): Promise<{ status: string; plan_id: string; plan: Site; migrated: boolean }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const url = planId ? `${BASE_URL}/api/plans/${planId}/import/` : `${BASE_URL}/api/plans/import/`;
+    const res = await fetch(url, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Import failed" }));
+      throw new Error(err.error || "Import failed");
+    }
+    return res.json();
+  },
+
   async searchEntities(
     query = "",
     domain = "",
