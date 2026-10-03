@@ -187,6 +187,152 @@ function deleteSubArea(id: string) {
     planStore.removeSubArea(id);
   }
 }
+
+// 1. Orphan Entity Detection (Missing from HA)
+const isEntityOrphaned = computed(() => {
+  if (!selectedEndpoint.value || entityStore.entities.length === 0) return false;
+  if (selectedEndpoint.value.type === "composite") return false;
+  return !entityStore.entities.some((e) => e.entity_id === selectedEndpoint.value?.entity_id);
+});
+
+// 2. Companion Entities Management (Spec §Endpoints)
+const selectedCompanionToAdd = ref("");
+
+const availableEntitiesForCompanions = computed(() => {
+  if (!selectedEndpoint.value) return [];
+  const current = selectedEndpoint.value.companions || [];
+  return entityStore.entities.filter(
+    (e) => e.entity_id !== selectedEndpoint.value?.entity_id && !current.includes(e.entity_id)
+  );
+});
+
+function addCompanion(eid: string) {
+  if (!selectedEndpoint.value || !eid) return;
+  const current = [...(selectedEndpoint.value.companions || [])];
+  if (!current.includes(eid)) {
+    current.push(eid);
+    planStore.updateEndpoint(selectedEndpoint.value.id, { companions: current });
+  }
+  selectedCompanionToAdd.value = "";
+}
+
+function removeCompanion(eid: string) {
+  if (!selectedEndpoint.value) return;
+  const current = (selectedEndpoint.value.companions || []).filter((c) => c !== eid);
+  planStore.updateEndpoint(selectedEndpoint.value.id, { companions: current });
+}
+
+function autoDetectCompanions() {
+  if (!selectedEndpoint.value) return;
+  const baseEid = selectedEndpoint.value.entity_id;
+  const parts = baseEid.split(".");
+  const domain = parts[0];
+  const name = parts.slice(1).join(".");
+
+  const detected: string[] = [];
+  const suffixes = ["_battery", "_caution", "_problem", "_low_battery", "_tamper", "_temperature"];
+
+  for (const ent of entityStore.entities) {
+    if (ent.entity_id === baseEid) continue;
+    for (const s of suffixes) {
+      if (ent.entity_id.includes(name + s) || ent.entity_id.startsWith(`${domain}.${name}${s}`)) {
+        if (!detected.includes(ent.entity_id)) {
+          detected.push(ent.entity_id);
+        }
+      }
+    }
+  }
+
+  if (detected.length > 0) {
+    const existing = selectedEndpoint.value.companions || [];
+    const merged = Array.from(new Set([...existing, ...detected]));
+    planStore.updateEndpoint(selectedEndpoint.value.id, { companions: merged });
+    alert(`Auto-detected ${detected.length} companion sensor(s):\n${detected.join("\n")}`);
+  } else {
+    alert(`No companion sensors found matching pattern '${name}_[battery/caution/problem]'. You can add companions manually from the dropdown.`);
+  }
+}
+
+// 3. Linked Cameras Management (Spec §Endpoints)
+const selectedCameraToAdd = ref("");
+
+const availableCameras = computed(() => {
+  const list: Array<{ id: string; label: string }> = [];
+  // From placed endpoints
+  for (const ep of planStore.currentEndpoints) {
+    if (ep.type === "camera") {
+      list.push({ id: ep.entity_id, label: `${ep.label || ep.entity_id} (Placed)` });
+    }
+  }
+  // From HA camera entities
+  for (const ent of entityStore.entities) {
+    if (ent.domain === "camera" || ent.entity_id.startsWith("camera.")) {
+      if (!list.some((c) => c.id === ent.entity_id)) {
+        list.push({ id: ent.entity_id, label: ent.friendly_name || ent.entity_id });
+      }
+    }
+  }
+  return list;
+});
+
+function addLinkedCamera(camEid: string) {
+  if (!selectedEndpoint.value || !camEid) return;
+  const current = [...(selectedEndpoint.value.cameras || [])];
+  if (!current.includes(camEid)) {
+    current.push(camEid);
+    planStore.updateEndpoint(selectedEndpoint.value.id, { cameras: current });
+  }
+  selectedCameraToAdd.value = "";
+}
+
+function removeLinkedCamera(camEid: string) {
+  if (!selectedEndpoint.value) return;
+  const current = (selectedEndpoint.value.cameras || []).filter((c) => c !== camEid);
+  planStore.updateEndpoint(selectedEndpoint.value.id, { cameras: current });
+}
+
+// 4. Stale Sensor Threshold
+function updateStaleAfter(e: Event) {
+  const target = e.target as HTMLSelectElement;
+  if (selectedEndpoint.value) {
+    planStore.updateEndpoint(selectedEndpoint.value.id, {
+      stale_after: target.value.trim() ? target.value.trim() : null,
+    });
+  }
+}
+
+// 5. Coverage Cone FOV Controls
+function toggleCoverage(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (!selectedEndpoint.value) return;
+  if (target.checked) {
+    const defaultRange = selectedEndpoint.value.type === "camera" ? 110 : 75;
+    const defaultAngle = selectedEndpoint.value.type === "camera" ? 70 : 85;
+    planStore.updateEndpoint(selectedEndpoint.value.id, {
+      coverage: { type: "cone", range: defaultRange, angle: defaultAngle },
+    });
+  } else {
+    planStore.updateEndpoint(selectedEndpoint.value.id, { coverage: null });
+  }
+}
+
+function updateCoverageRange(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (!selectedEndpoint.value || !selectedEndpoint.value.coverage) return;
+  const range = parseInt(target.value, 10);
+  planStore.updateEndpoint(selectedEndpoint.value.id, {
+    coverage: { ...selectedEndpoint.value.coverage, range },
+  });
+}
+
+function updateCoverageAngle(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (!selectedEndpoint.value || !selectedEndpoint.value.coverage) return;
+  const angle = parseInt(target.value, 10);
+  planStore.updateEndpoint(selectedEndpoint.value.id, {
+    coverage: { ...selectedEndpoint.value.coverage, angle },
+  });
+}
 </script>
 
 <template>
@@ -293,6 +439,150 @@ function deleteSubArea(id: string) {
       <div class="prop-group">
         <label>Entity ID</label>
         <input type="text" :value="selectedEndpoint.entity_id" readonly class="readonly-input" />
+      </div>
+
+      <!-- Orphan Entity Warning (Spec §Editing behaviour) -->
+      <div v-if="isEntityOrphaned" class="warning-alert-box">
+        <div class="alert-title">⚠️ Entity Not Found in HA</div>
+        <p class="alert-desc">
+          This entity ID is not currently registered in Home Assistant. Real-time updates will not be received.
+        </p>
+      </div>
+
+      <!-- Companion Entities (Spec §Endpoints & §First site reference) -->
+      <div class="prop-group">
+        <div class="prop-row-header">
+          <label>Companion Sensors ({{ (selectedEndpoint.companions || []).length }})</label>
+          <button
+            type="button"
+            class="auto-detect-btn"
+            title="Scan Home Assistant for matching battery/caution sensors"
+            @click="autoDetectCompanions"
+          >
+            ⚡ Auto-Detect
+          </button>
+        </div>
+        <p class="field-help">Attach battery or caution sensors displayed as endpoint badges.</p>
+
+        <!-- Current companions list -->
+        <div v-if="selectedEndpoint.companions?.length" class="items-chip-list">
+          <div v-for="comp in selectedEndpoint.companions" :key="comp" class="chip-item">
+            <span class="chip-text">{{ comp }}</span>
+            <button class="chip-remove" title="Remove companion" @click="removeCompanion(comp)">×</button>
+          </div>
+        </div>
+
+        <!-- Add companion picker -->
+        <div class="add-item-row" v-if="availableEntitiesForCompanions.length">
+          <select v-model="selectedCompanionToAdd">
+            <option value="">+ Add companion sensor...</option>
+            <option v-for="ent in availableEntitiesForCompanions" :key="ent.entity_id" :value="ent.entity_id">
+              {{ ent.friendly_name || ent.entity_id }}
+            </option>
+          </select>
+          <button
+            class="add-item-btn"
+            :disabled="!selectedCompanionToAdd"
+            @click="addCompanion(selectedCompanionToAdd)"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+
+      <!-- Linked Cameras (Spec §Endpoints & §Cameras) -->
+      <div class="prop-group" v-if="selectedEndpoint.type !== 'camera'">
+        <label>Linked Cameras ({{ (selectedEndpoint.cameras || []).length }})</label>
+        <p class="field-help">Automatically open camera snapshot popup when this sensor fires.</p>
+
+        <!-- Current linked cameras list -->
+        <div v-if="selectedEndpoint.cameras?.length" class="items-chip-list">
+          <div v-for="cam in selectedEndpoint.cameras" :key="cam" class="chip-item camera-chip">
+            <span class="chip-text">📹 {{ cam }}</span>
+            <button class="chip-remove" title="Unlink camera" @click="removeLinkedCamera(cam)">×</button>
+          </div>
+        </div>
+
+        <!-- Add linked camera picker -->
+        <div class="add-item-row" v-if="availableCameras.length">
+          <select v-model="selectedCameraToAdd">
+            <option value="">+ Link a camera feed...</option>
+            <option v-for="cam in availableCameras" :key="cam.id" :value="cam.id">
+              {{ cam.label }}
+            </option>
+          </select>
+          <button
+            class="add-item-btn"
+            :disabled="!selectedCameraToAdd"
+            @click="addLinkedCamera(selectedCameraToAdd)"
+          >
+            Link
+          </button>
+        </div>
+      </div>
+
+      <!-- Stale RF Sensor Threshold (Spec §Last seen) -->
+      <div class="prop-group">
+        <label>Stale RF Sensor Flagging</label>
+        <p class="field-help">Flag sensor with a warning badge if no state change occurs within this window.</p>
+        <select :value="selectedEndpoint.stale_after || ''" @change="updateStaleAfter">
+          <option value="">Disabled (Real-time)</option>
+          <option value="1h">1 hour</option>
+          <option value="6h">6 hours</option>
+          <option value="12h">12 hours</option>
+          <option value="24h">24 hours (1 day)</option>
+          <option value="3d">3 days</option>
+          <option value="7d">7 days (1 week)</option>
+          <option value="30d">30 days (1 month)</option>
+        </select>
+      </div>
+
+      <!-- Coverage Cone / Field of View (Spec §Coverage) -->
+      <div class="prop-group" v-if="selectedEndpoint.type === 'motion' || selectedEndpoint.type === 'camera'">
+        <div class="prop-row-header">
+          <label>Detection / Coverage FOV</label>
+          <label class="toggle-switch">
+            <input
+              type="checkbox"
+              :checked="!!selectedEndpoint.coverage"
+              @change="toggleCoverage"
+            />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <p class="field-help">Visual field-of-view or PIR detection sector on the floor plan.</p>
+
+        <div v-if="selectedEndpoint.coverage" class="coverage-controls-box">
+          <div class="slider-row">
+            <div class="slider-info">
+              <span>Detection Range</span>
+              <span class="val-tag">{{ selectedEndpoint.coverage.range }}px</span>
+            </div>
+            <input
+              type="range"
+              min="30"
+              max="250"
+              :value="selectedEndpoint.coverage.range"
+              @input="updateCoverageRange"
+              class="range-slider"
+            />
+          </div>
+
+          <div class="slider-row">
+            <div class="slider-info">
+              <span>Beam Angle</span>
+              <span class="val-tag">{{ selectedEndpoint.coverage.angle }}°</span>
+            </div>
+            <input
+              type="range"
+              min="15"
+              max="180"
+              :value="selectedEndpoint.coverage.angle"
+              @input="updateCoverageAngle"
+              class="range-slider"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- Group Unit -->
@@ -774,5 +1064,195 @@ label {
   font-size: 11px;
   line-height: 1.6;
   color: var(--text-secondary);
+}
+
+/* Warnings and Alerts */
+.warning-alert-box {
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.alert-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f87171;
+  margin-bottom: 4px;
+}
+
+.alert-desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Auto-Detect Button */
+.auto-detect-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.auto-detect-btn:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #34d399;
+}
+
+/* Chips List */
+.items-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.chip-item.camera-chip {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: #ef4444;
+}
+
+/* Add Item Row */
+.add-item-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.add-item-row select {
+  flex: 1;
+}
+
+.add-item-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.add-item-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Coverage Controls */
+.coverage-controls-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+}
+
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slider-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.val-tag {
+  color: #818cf8;
+  font-weight: 600;
+}
+
+.range-slider {
+  width: 100%;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  transition: 0.2s;
+  border-radius: 18px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #94a3b8;
+  transition: 0.2s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(14px);
+  background-color: #ffffff;
 }
 </style>

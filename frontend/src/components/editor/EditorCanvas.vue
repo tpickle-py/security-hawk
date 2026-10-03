@@ -2,6 +2,7 @@
 import { ref, computed } from "vue";
 import { useEditorStore } from "@/stores/editorStore";
 import { usePlanStore } from "@/stores/planStore";
+import { useEntityStore } from "@/stores/entityStore";
 import { useSvgPanZoom } from "@/composables/useSvgPanZoom";
 import type { Endpoint } from "@/types/plan";
 
@@ -15,7 +16,13 @@ import type { WallGeometry } from "@/types/plan";
 
 const editorStore = useEditorStore();
 const planStore = usePlanStore();
+const entityStore = useEntityStore();
 const { extractVertices, snapCoordinate } = useSnapEngine();
+
+function isOrphaned(ep: Endpoint) {
+  if (ep.type === "composite" || entityStore.entities.length === 0) return false;
+  return !entityStore.entities.some((e) => e.entity_id === ep.entity_id);
+}
 
 const svgRef = ref<SVGSVGElement | null>(null);
 const { screenToSvg, onMouseDown: panZoomMouseDown, onMouseMove: panZoomMouseMove, onMouseUp: panZoomMouseUp, onWheel } = useSvgPanZoom(svgRef);
@@ -395,6 +402,7 @@ function onDrop(e: DragEvent) {
             :key="ep.id"
             :endpoint="ep"
             :is-selected="editorStore.isEndpointSelected(ep.id)"
+            :is-orphaned="isOrphaned(ep)"
             @select="handleEndpointSelect"
             @drag-start="handleEndpointDragStart"
           />

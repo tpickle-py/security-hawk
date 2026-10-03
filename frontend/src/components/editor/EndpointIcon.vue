@@ -2,15 +2,34 @@
 import { computed } from "vue";
 import type { Endpoint } from "@/types/plan";
 
-const props = defineProps<{
-  endpoint: Endpoint;
-  isSelected: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    endpoint: Endpoint;
+    isSelected: boolean;
+    isOrphaned?: boolean;
+  }>(),
+  {
+    isOrphaned: false,
+  }
+);
 
 const emit = defineEmits<{
   (e: "select", endpoint: Endpoint, event: MouseEvent): void;
   (e: "drag-start", endpoint: Endpoint, event: MouseEvent): void;
 }>();
+
+const coveragePath = computed(() => {
+  if (!props.endpoint.coverage) return null;
+  const range = props.endpoint.coverage.range || (props.endpoint.type === "camera" ? 110 : 75);
+  const angleDeg = props.endpoint.coverage.angle || (props.endpoint.type === "camera" ? 70 : 85);
+  const halfRad = (angleDeg / 2) * (Math.PI / 180);
+  const x1 = range * Math.cos(-halfRad);
+  const y1 = range * Math.sin(-halfRad);
+  const x2 = range * Math.cos(halfRad);
+  const y2 = range * Math.sin(halfRad);
+  const largeArcFlag = angleDeg > 180 ? 1 : 0;
+  return `M 0 0 L ${x1} ${y1} A ${range} ${range} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+});
 
 const iconHref = computed(() => {
   switch (props.endpoint.type) {
@@ -42,6 +61,17 @@ function handleMouseDown(e: MouseEvent) {
     :transform="`translate(${endpoint.x}, ${endpoint.y}) rotate(${endpoint.rotation || 0})`"
     @mousedown.stop="handleMouseDown"
   >
+    <!-- Coverage FOV preview in editor -->
+    <path
+      v-if="coveragePath"
+      :d="coveragePath"
+      :fill="endpoint.type === 'camera' ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)'"
+      :stroke="endpoint.type === 'camera' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(16, 185, 129, 0.35)'"
+      stroke-width="1.2"
+      stroke-dasharray="3 3"
+      class="editor-coverage-cone"
+    />
+
     <!-- Selection highlight circle -->
     <circle
       v-if="isSelected"
@@ -66,6 +96,24 @@ function handleMouseDown(e: MouseEvent) {
     <!-- Nested entity indicator -->
     <g v-if="endpoint.parent_id" transform="translate(-11, -12)">
       <circle cx="0" cy="0" r="5" fill="#f59e0b" stroke="#ffffff" stroke-width="1" />
+    </g>
+
+    <!-- Companion sensors badge indicator -->
+    <g v-if="endpoint.companions && endpoint.companions.length > 0" transform="translate(-12, 10)">
+      <circle cx="0" cy="0" r="5.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+      <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="7" font-weight="bold">{{ endpoint.companions.length }}</text>
+    </g>
+
+    <!-- Linked cameras badge indicator -->
+    <g v-if="endpoint.cameras && endpoint.cameras.length > 0" transform="translate(12, 10)">
+      <circle cx="0" cy="0" r="5.5" fill="#3b82f6" stroke="#ffffff" stroke-width="1" />
+      <text x="0" y="0.5" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="7" font-weight="bold">C</text>
+    </g>
+
+    <!-- Orphaned / missing Home Assistant entity warning -->
+    <g v-if="isOrphaned" transform="translate(0, -18)">
+      <circle cx="0" cy="0" r="7" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" />
+      <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="9" font-weight="bold">!</text>
     </g>
 
     <!-- Label -->

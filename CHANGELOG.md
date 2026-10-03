@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MQTT Information Store & Home Assistant MQTT Discovery**: Lightweight zero-dependency async MQTT 3.1.1 client that publishes state changes and automatic Home Assistant MQTT Discovery payloads (`homeassistant/binary_sensor/security_hawk_<rule_id>/config`) with retain support and authentication.
 - **Application & Integration Settings**: Dedicated Settings modal to configure automation behaviors (Quiet Return timeout, Camera Snapshot dismiss timeout, default startup view), MQTT broker parameters, and one-click Home Assistant synthetic helper registration.
 - **Canvas Synthetic / Composite Endpoints**: Rules and synthetic sensors can now be browsed, tested, and dragged directly from the "⚡ Rules" tab in EntityPicker onto the floor plan canvas as interactive `composite` endpoints with pulsing alert rings.
+- **Endpoint Properties & Companion Auto-Discovery**:
+  - One-click **"⚡ Auto-Detect Companions"** matching template sensor patterns (`_battery`, `_caution`, `_problem`, `_low_battery`, `_tamper`, `_temperature`).
+  - **Linked Cameras Picker**: Direct binding of camera feeds to sensors for automatic live popups on detection.
+  - **Stale RF Threshold Selector**: Configurable quiet duration (`1h`, `6h`, `12h`, `24h`, `3d`, `7d`, `30d`) before flagging battery sensors.
+  - **Interactive Coverage FOV Controls**: Detection range (px/meters) and beam angle (15°–180°) sliders with real-time canvas preview.
+  - **Orphaned Entity Warning**: Identifies and flags entities missing or renamed in Home Assistant with canvas indicator badges and warning banners.
 
 ## [0.2.0] - 2026-10-03
 
