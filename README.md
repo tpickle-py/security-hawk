@@ -11,6 +11,7 @@
 ![Ruff](https://img.shields.io/badge/linter-ruff-black?style=for-the-badge&logo=ruff&logoColor=white)
 ![uv](https://img.shields.io/badge/package%20manager-uv-DE5FE9?style=for-the-badge&logo=astral&logoColor=white)
 ![Home Assistant](https://img.shields.io/badge/home%20assistant-app%20%2F%20add--on-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)
+![Security](https://img.shields.io/badge/trivy%20scan-0%20vulnerabilities-brightgreen?style=for-the-badge&logo=aqua&logoColor=white)
 
 **Floor plan viewer with real-time sensor state, live camera streaming, nested zones, and unattended TV display for Home Assistant**
 
@@ -201,6 +202,16 @@
 
    # Run linter checks
    uv run ruff check .
+   ```
+
+5. **Docker Build & Trivy Security Scan:**
+   ```bash
+   # Build the container image
+   docker build -t security-hawk:latest .
+
+   # Scan container image for vulnerabilities with Trivy
+   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+     aquasec/trivy:latest image --severity HIGH,CRITICAL security-hawk:latest
    ```
 
 ---
