@@ -20,6 +20,57 @@ const selectedEndpoint = computed(() => {
   return planStore.currentEndpoints.find((ep) => ep.id === editorStore.selectedEndpointId) || null;
 });
 
+const selectedShape = computed(() => {
+  if (!editorStore.selectedShapeId) return null;
+  return planStore.currentShapes.find((s) => s.id === editorStore.selectedShapeId) || null;
+});
+
+function handleWallThickness(e: Event) {
+  const target = e.target as HTMLInputElement;
+  const val = parseInt(target.value, 10);
+  if (selectedShape.value && !isNaN(val)) {
+    const geom = { ...selectedShape.value.geometry, thickness: val };
+    planStore.updateShape(selectedShape.value.id, { geometry: geom });
+  }
+}
+
+function handleShapeStroke(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (selectedShape.value) {
+    const style = { ...selectedShape.value.style, stroke: target.value };
+    planStore.updateShape(selectedShape.value.id, { style });
+  }
+}
+
+function handleRoomName(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (selectedShape.value && selectedShape.value.type === "room") {
+    const geom = { ...selectedShape.value.geometry, name: target.value };
+    planStore.updateShape(selectedShape.value.id, { geometry: geom });
+  }
+}
+
+function handleLabelText(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (selectedShape.value && selectedShape.value.type === "label") {
+    const geom = { ...selectedShape.value.geometry, text: target.value };
+    planStore.updateShape(selectedShape.value.id, { geometry: geom });
+  }
+}
+
+function deleteCurrentShape() {
+  if (selectedShape.value) {
+    planStore.removeShape(selectedShape.value.id);
+    editorStore.selectedShapeId = null;
+  }
+}
+
+function deleteWallOpening(openingId: string) {
+  if (selectedShape.value && selectedShape.value.type === "wall") {
+    planStore.removeWallOpening(selectedShape.value.id, openingId);
+  }
+}
+
 // Other endpoints on the floor that can act as a parent for nesting
 const availableParentEndpoints = computed(() => {
   if (!selectedEndpoint.value) return [];
@@ -297,6 +348,89 @@ function deleteSubArea(id: string) {
             <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
           </svg>
           Delete Endpoint
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Single Shape Selected (Wall, Room, Label) -->
+  <aside v-else-if="selectedShape" class="property-panel glass-panel">
+    <div class="panel-header">
+      <div class="header-title">{{ selectedShape.type.toUpperCase() }} Properties</div>
+      <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+    </div>
+
+    <div class="panel-body">
+      <!-- Wall properties -->
+      <template v-if="selectedShape.type === 'wall'">
+        <div class="prop-group">
+          <label>Wall Thickness (px)</label>
+          <input
+            type="number"
+            min="2"
+            max="32"
+            :value="(selectedShape.geometry as any).thickness || 8"
+            @change="handleWallThickness"
+          />
+        </div>
+        <div class="prop-group">
+          <label>Wall Color</label>
+          <input
+            type="color"
+            :value="(selectedShape.style as any).stroke || '#94a3b8'"
+            @change="handleShapeStroke"
+          />
+        </div>
+        <!-- Openings list -->
+        <div class="prop-group" v-if="(selectedShape.geometry as any).openings?.length">
+          <label>Wall Openings ({{ (selectedShape.geometry as any).openings.length }})</label>
+          <div v-for="op in (selectedShape.geometry as any).openings" :key="op.id" class="subarea-row">
+            <span class="subarea-name">{{ op.type === 'door' ? '🚪 Door Cutout' : '🪟 Window Cutout' }} ({{ op.width }}px)</span>
+            <button class="tiny-btn danger" title="Remove opening" @click="deleteWallOpening(op.id)">×</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Room properties -->
+      <template v-else-if="selectedShape.type === 'room'">
+        <div class="prop-group">
+          <label>Room Name</label>
+          <input
+            type="text"
+            :value="(selectedShape.geometry as any).name || ''"
+            @input="handleRoomName"
+            placeholder="e.g. Master Bedroom"
+          />
+        </div>
+        <div class="prop-group">
+          <label>Border Color</label>
+          <input
+            type="color"
+            :value="(selectedShape.style as any).stroke || '#6366f1'"
+            @change="handleShapeStroke"
+          />
+        </div>
+      </template>
+
+      <!-- Label properties -->
+      <template v-else-if="selectedShape.type === 'label'">
+        <div class="prop-group">
+          <label>Label Text</label>
+          <input
+            type="text"
+            :value="(selectedShape.geometry as any).text || ''"
+            @input="handleLabelText"
+            placeholder="e.g. Patio"
+          />
+        </div>
+      </template>
+
+      <div class="panel-actions">
+        <button class="delete-btn" @click="deleteCurrentShape">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+          </svg>
+          Delete Shape
         </button>
       </div>
     </div>

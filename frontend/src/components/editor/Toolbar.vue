@@ -103,6 +103,7 @@ function handleKeyDown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
   if (tag === "input" || tag === "textarea") return;
 
+  // Undo / Redo
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
     if (e.shiftKey) {
       if (historyStore.canRedo) {
@@ -115,11 +116,33 @@ function handleKeyDown(e: KeyboardEvent) {
         planStore.performUndo();
       }
     }
+    return;
   } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
     if (historyStore.canRedo) {
       e.preventDefault();
       planStore.performRedo();
     }
+    return;
+  }
+
+  // Escape cancels drawing or returns to select tool
+  if (e.key === "Escape") {
+    editorStore.drawingPoints = [];
+    editorStore.setTool("select");
+    editorStore.clearSelection();
+    return;
+  }
+
+  // Single-key shortcuts
+  if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+    const k = e.key.toLowerCase();
+    if (k === "v") editorStore.setTool("select");
+    else if (k === "h") editorStore.setTool("pan");
+    else if (k === "w") editorStore.setTool("wall");
+    else if (k === "r") editorStore.setTool("room");
+    else if (k === "d") editorStore.setTool("door");
+    else if (k === "n") editorStore.setTool("window");
+    else if (k === "t") editorStore.setTool("label");
   }
 }
 
@@ -166,6 +189,66 @@ onUnmounted(() => {
       >
         <svg viewBox="0 0 24 24" width="18" height="18">
           <path fill="currentColor" d="M1.5 8l3-3 18 18-3 3-18-18zm3.5.5l1.5 1.5-1.5 1.5 1.5 1.5-1.5 1.5 1.5 1.5-1.5 1.5 1.5 1.5-1.5 1.5 1.5 1.5-1.5 1.5 1.5 1.5"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Drawing Tools -->
+    <div class="tool-group">
+      <button
+        class="tool-btn"
+        :class="{ active: editorStore.activeTool === 'wall' }"
+        title="Draw Wall (W) - Click two points, Shift to chain"
+        @click="editorStore.setTool('wall')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4h-4V6h4v2zm-6 0H9V6h4v2zM5 6h2v2H5V6zm0 4h6v2H5v-2zm8 0h6v2h-6v-2zm-2 4H5v-2h6v2zm2 0v-2h6v2h-6zm4 4h-4v-2h4v2zm-6 0H9v-2h4v2zM5 16h2v2H5v-2z"/>
+        </svg>
+      </button>
+
+      <button
+        class="tool-btn"
+        :class="{ active: editorStore.activeTool === 'room' }"
+        title="Room Polygon (R) - Click vertices, double-click to close"
+        @click="editorStore.setTool('room')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-1 16H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1z"/>
+        </svg>
+      </button>
+
+      <button
+        class="tool-btn"
+        :class="{ active: editorStore.activeTool === 'door' }"
+        title="Door Cutout (D) - Click existing wall to place door"
+        @click="editorStore.setTool('door')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M19 19V5c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v14H3v2h18v-2h-2zm-4-2H7V5h8v12zm-3-7c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
+        </svg>
+      </button>
+
+      <button
+        class="tool-btn"
+        :class="{ active: editorStore.activeTool === 'window' }"
+        title="Window Cutout (N) - Click existing wall to place window"
+        @click="editorStore.setTool('window')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 8H5V5h6v6zm2-6h6v6h-6V5zm-2 8v6H5v-6h6zm2 6v-6h6v6h-6z"/>
+        </svg>
+      </button>
+
+      <button
+        class="tool-btn"
+        :class="{ active: editorStore.activeTool === 'label' }"
+        title="Text Label (T) - Click canvas to place architectural text"
+        @click="editorStore.setTool('label')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M5 4v3h5.5v12h3V7H19V4H5z"/>
         </svg>
       </button>
     </div>

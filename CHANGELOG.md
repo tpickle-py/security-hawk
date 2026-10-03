@@ -5,14 +5,20 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-03
 
 ### Added
-- **Undo & Redo History**: In-memory 40-step action history with `Ctrl+Z` and `Ctrl+Y` / `Ctrl+Shift+Z` keyboard shortcuts and dedicated toolbar controls.
+- **Architectural Vector Drawing Tools**: In-editor vector drawing tools with grid and vertex snapping (14px magnetic threshold), wall drawing with orthogonal angle lock, room polygon tool with auto-closing and centroid labeling, and architectural text labels.
+- **Wall Cutouts for Doors & Windows**: Click-to-cut openings on existing walls rendering architectural 90° door swings and dual-pane window frame cutouts.
+- **Canvas Undo & Redo History**: In-memory 40-step action history with `Ctrl+Z` and `Ctrl+Y` / `Ctrl+Shift+Z` keyboard shortcuts and dedicated toolbar controls.
 - **Rolling Version History**: Automated 20-version rolling snapshot modal allowing instant one-click rollback to prior floor plan versions with pre-rollback safety snapshots.
 - **Floor Plan JSON Export & Import**: Direct file export (`/api/plans/<id>/export/`) and import (`/api/plans/import/` or `/api/plans/<id>/import/`) for local offline backups, templating, and staging tests.
 - **Automated Schema Migrations**: Robust versioned plan migration engine (`schema_version: 1 -> 2`) executing automatically during plan loading, saving, and importing to ensure backwards compatibility with nested shapes, sub-areas, and entity grouping.
-- **Architectural Wall & Room Drawing**: In-editor vector drawing tools with grid and vertex snapping (12px magnetic threshold), room polygon fill rendering, and customizable architectural text labels.
+- **Linked Camera Auto-Popup**: Automatic windowed camera snapshot popup when linked sensors trigger, featuring a 30-second visual auto-dismiss countdown bar with pause-on-hover and instant `Escape`/`Back` remote dismissal.
+- **Live Activity Event Feed**: Collapsible slide-out timeline drawer showing the last 50 state transitions with domain badges, search filtering, and one-click smooth panning/zooming to the target endpoint.
+- **Follow-Activity Mode**: Hands-free live tracking mode that automatically centers and highlights active sensors on canvas, with a 120-second quiet-return timer returning to the overview floor plan.
+- **Sensor Coverage Cones**: SVG field-of-view (FOV) sector visualization for camera lenses (70° cone) and motion PIR detection zones (85° sector).
+- **Stale RF Sensor Flagging**: Automatic warning indicator badges for battery-operated RF sensors that have not reported state updates within configured `stale_after` intervals.
 
 ## [0.1.0] - 2026-10-03
 

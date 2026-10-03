@@ -59,11 +59,52 @@ export interface SubArea {
   color?: string;
 }
 
+export interface WallOpening {
+  id: string;
+  type: "door" | "window";
+  offset: number; // offset in px along wall vector from start point
+  width: number;  // width of opening in px
+  swingDirection?: "left" | "right"; // for doors
+  openPercent?: number; // 0 = closed, 100 = open
+}
+
+export interface WallGeometry {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  thickness?: number; // default 8px
+  openings?: WallOpening[];
+}
+
+export interface RoomGeometry {
+  points: Array<[number, number]>;
+  name?: string;
+}
+
+export interface LabelGeometry {
+  x: number;
+  y: number;
+  text: string;
+  fontSize?: number;
+  rotation?: number;
+}
+
+export interface ShapeStyle {
+  stroke?: string;
+  strokeWidth?: number;
+  fill?: string;
+  fillOpacity?: number;
+  color?: string;
+  fontSize?: number;
+  fontFamily?: string;
+}
+
 export interface Shape {
   id: string;
   type: "wall" | "room" | "door" | "window" | "label";
-  geometry: Record<string, unknown>;
-  style: Record<string, unknown>;
+  geometry: WallGeometry | RoomGeometry | LabelGeometry | Record<string, unknown>;
+  style: ShapeStyle | Record<string, unknown>;
 }
 
 export interface Floor {
@@ -76,7 +117,7 @@ export interface Floor {
   endpoints: Endpoint[];
 }
 
-export type FloorLike = Omit<Floor, "shapes">;
+export type FloorLike = Omit<Floor, "shapes"> & { shapes?: Shape[] };
 
 export interface Building {
   id: string;

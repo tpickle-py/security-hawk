@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Site, Floor, Endpoint, Scale, BackgroundAsset, SubArea } from "@/types/plan";
+import type { Site, Floor, Endpoint, Scale, BackgroundAsset, SubArea, Shape, WallOpening, WallGeometry } from "@/types/plan";
 import { api } from "@/services/api";
 import { useHistoryStore } from "@/stores/historyStore";
 
@@ -263,6 +263,83 @@ export const usePlanStore = defineStore("plan", () => {
     markDirtyAndAutosave();
   }
 
+  const currentShapes = computed<Shape[]>(() => {
+    if (isOverview.value) {
+      return (site.value?.overview.shapes as Shape[]) || [];
+    }
+    return currentFloor.value?.shapes || [];
+  });
+
+  function addShape(shape: Shape) {
+    if (!site.value) return;
+    snapshotBeforeMutation();
+    if (isOverview.value) {
+      if (!site.value.overview.shapes) site.value.overview.shapes = [];
+      site.value.overview.shapes.push(shape);
+    } else if (currentFloor.value) {
+      if (!currentFloor.value.shapes) currentFloor.value.shapes = [];
+      currentFloor.value.shapes.push(shape);
+    }
+    markDirtyAndAutosave();
+  }
+
+  function updateShape(shapeId: string, updates: Partial<Shape>) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const idx = list.findIndex((s) => s.id === shapeId);
+    if (idx !== -1) {
+      snapshotBeforeMutation();
+      list[idx] = { ...list[idx], ...updates };
+      markDirtyAndAutosave();
+    }
+  }
+
+  function removeShape(shapeId: string) {
+    if (!site.value) return;
+    snapshotBeforeMutation();
+    if (isOverview.value) {
+      if (site.value.overview.shapes) {
+        site.value.overview.shapes = (site.value.overview.shapes as Shape[]).filter((s) => s.id !== shapeId);
+      }
+    } else if (currentFloor.value?.shapes) {
+      currentFloor.value.shapes = currentFloor.value.shapes.filter((s) => s.id !== shapeId);
+    }
+    markDirtyAndAutosave();
+  }
+
+  function addWallOpening(wallId: string, opening: WallOpening) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const wall = list.find((s) => s.id === wallId && s.type === "wall");
+    if (wall) {
+      snapshotBeforeMutation();
+      const geom = wall.geometry as WallGeometry;
+      if (!geom.openings) geom.openings = [];
+      geom.openings.push(opening);
+      markDirtyAndAutosave();
+    }
+  }
+
+  function removeWallOpening(wallId: string, openingId: string) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const wall = list.find((s) => s.id === wallId && s.type === "wall");
+    if (wall) {
+      snapshotBeforeMutation();
+      const geom = wall.geometry as WallGeometry;
+      if (geom.openings) {
+        geom.openings = geom.openings.filter((op) => op.id !== openingId);
+        markDirtyAndAutosave();
+      }
+    }
+  }
+
   return {
     currentPlanId,
     site,
@@ -273,6 +350,7 @@ export const usePlanStore = defineStore("plan", () => {
     currentFloor,
     currentEndpoints,
     currentSubAreas,
+    currentShapes,
     isLoading,
     isSaving,
     lastSavedAt,
@@ -290,6 +368,11 @@ export const usePlanStore = defineStore("plan", () => {
     nestEndpoint,
     addSubArea,
     removeSubArea,
+    addShape,
+    updateShape,
+    removeShape,
+    addWallOpening,
+    removeWallOpening,
     performUndo,
     performRedo,
     setBackground,

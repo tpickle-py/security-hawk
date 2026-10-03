@@ -52,6 +52,51 @@ const iconHref = computed(() => {
   return "#icon-generic";
 });
 
+// Coverage Cone Math (Camera FOV / Motion PIR Sector)
+const coveragePath = computed(() => {
+  if (props.endpoint.type !== "camera" && props.endpoint.type !== "motion") return null;
+
+  const range = props.endpoint.coverage?.range || (props.endpoint.type === "camera" ? 110 : 75);
+  const angleDeg = props.endpoint.coverage?.angle || (props.endpoint.type === "camera" ? 70 : 85);
+
+  const halfRad = (angleDeg / 2) * (Math.PI / 180);
+  const x1 = range * Math.cos(-halfRad);
+  const y1 = range * Math.sin(-halfRad);
+  const x2 = range * Math.cos(halfRad);
+  const y2 = range * Math.sin(halfRad);
+  const largeArcFlag = angleDeg > 180 ? 1 : 0;
+
+  return `M 0 0 L ${x1} ${y1} A ${range} ${range} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+});
+
+// Stale RF Sensor Check
+const isStale = computed(() => {
+  if (!props.endpoint.stale_after) return false;
+  const lastChangedStr = entityState.value?.last_changed;
+  if (!lastChangedStr) return false;
+
+  const lastChangedTime = new Date(lastChangedStr).getTime();
+  const now = Date.now();
+  let maxAgeSec = 24 * 3600; // default 24h
+
+  const sa = props.endpoint.stale_after.trim().toLowerCase();
+  if (sa.endsWith("h")) {
+    maxAgeSec = parseFloat(sa) * 3600;
+  } else if (sa.endsWith("m")) {
+    maxAgeSec = parseFloat(sa) * 60;
+  } else if (sa.endsWith("d")) {
+    maxAgeSec = parseFloat(sa) * 86400;
+  } else if (!isNaN(parseFloat(sa))) {
+    maxAgeSec = parseFloat(sa);
+  }
+
+  return (now - lastChangedTime) / 1000 > maxAgeSec;
+});
+
+const isHighlighted = computed(() => {
+  return liveStore.highlightedEndpointId === props.endpoint.id;
+});
+
 function handleClick() {
   if (props.endpoint.type === "camera") {
     emit("click-camera", props.endpoint);
@@ -66,6 +111,7 @@ function handleClick() {
       active: isActive,
       unavailable: isUnavailable,
       'is-camera': endpoint.type === 'camera',
+      'is-highlighted': isHighlighted,
     }"
     :transform="`translate(${endpoint.x}, ${endpoint.y}) rotate(${endpoint.rotation || 0})`"
     :tabindex="0"
@@ -75,6 +121,29 @@ function handleClick() {
     @keydown.enter.prevent="handleClick"
     @keydown.space.prevent="handleClick"
   >
+    <!-- Coverage Cone (Field of View / Detection Sector) -->
+    <path
+      v-if="coveragePath"
+      :d="coveragePath"
+      :fill="endpoint.type === 'camera' ? 'rgba(99, 102, 241, 0.10)' : isActive ? 'rgba(239, 68, 68, 0.22)' : 'rgba(16, 185, 129, 0.08)'"
+      :stroke="endpoint.type === 'camera' ? 'rgba(99, 102, 241, 0.35)' : isActive ? 'rgba(239, 68, 68, 0.65)' : 'rgba(16, 185, 129, 0.25)'"
+      stroke-width="1.2"
+      stroke-dasharray="3 3"
+      class="coverage-cone"
+    />
+
+    <!-- Highlight Beacon Wave -->
+    <circle
+      v-if="isHighlighted"
+      cx="0"
+      cy="0"
+      r="36"
+      fill="rgba(99, 102, 241, 0.2)"
+      stroke="#6366f1"
+      stroke-width="2.5"
+      class="beacon-pulse"
+    />
+
     <!-- Focus ring for remote and keyboard navigation -->
     <circle
       cx="0"
@@ -133,6 +202,12 @@ function handleClick() {
     <g v-if="isUnavailable" transform="translate(10, -10)">
       <circle cx="0" cy="0" r="6" fill="#64748b" />
       <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="8" font-weight="bold">?</text>
+    </g>
+
+    <!-- Stale RF Sensor Warning Indicator -->
+    <g v-if="isStale" transform="translate(-10, -10)">
+      <circle cx="0" cy="0" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="1" />
+      <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="8" font-weight="bold">!</text>
     </g>
 
     <!-- Label -->
@@ -203,5 +278,26 @@ function handleClick() {
 .label-active {
   fill: #ffffff;
   font-weight: 600;
+}
+
+.coverage-cone {
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.beacon-pulse {
+  animation: beaconWave 1.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes beaconWave {
+  0% {
+    r: 16;
+    opacity: 0.9;
+  }
+  100% {
+    r: 44;
+    opacity: 0;
+  }
 }
 </style>

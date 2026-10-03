@@ -9,12 +9,20 @@ import SvgDefs from "@/components/shared/SvgDefs.vue";
 import BackgroundLayer from "@/components/editor/BackgroundLayer.vue";
 import EndpointIcon from "@/components/editor/EndpointIcon.vue";
 import ScaleTool from "@/components/editor/ScaleTool.vue";
+import ShapesLayer from "@/components/editor/ShapesLayer.vue";
+import { useSnapEngine, type SnapResult } from "@/composables/useSnapEngine";
+import type { WallGeometry } from "@/types/plan";
 
 const editorStore = useEditorStore();
 const planStore = usePlanStore();
+const { extractVertices, snapCoordinate } = useSnapEngine();
 
 const svgRef = ref<SVGSVGElement | null>(null);
 const { screenToSvg, onMouseDown: panZoomMouseDown, onMouseMove: panZoomMouseMove, onMouseUp: panZoomMouseUp, onWheel } = useSvgPanZoom(svgRef);
+
+// Cursor tracking & Magnetic snap state
+const cursorPoint = ref<{ x: number; y: number } | null>(null);
+const currentSnapResult = ref<SnapResult | null>(null);
 
 // Marquee / Box Selection
 const isBoxSelecting = ref(false);
@@ -58,8 +66,21 @@ function handleCanvasMouseDown(e: MouseEvent) {
 function handleCanvasMouseMove(e: MouseEvent) {
   panZoomMouseMove(e);
 
+  const raw = screenToSvg(e.clientX, e.clientY);
+
+  // Calculate magnetic snap coordinates
+  const vertices = extractVertices(planStore.currentShapes, planStore.currentEndpoints);
+  const origin = editorStore.drawingPoints[0] || null;
+  const snapRes = snapCoordinate(raw.x, raw.y, vertices, {
+    originPoint: origin,
+    shiftKey: e.shiftKey,
+    gridEnabled: true,
+  });
+  currentSnapResult.value = snapRes;
+  cursorPoint.value = { x: snapRes.x, y: snapRes.y };
+
   if (isBoxSelecting.value && boxStart.value) {
-    boxCurrent.value = screenToSvg(e.clientX, e.clientY);
+    boxCurrent.value = raw;
   }
 }
 
@@ -96,10 +117,127 @@ function handleCanvasMouseUp(e: MouseEvent) {
 }
 
 function handleCanvasClick(e: MouseEvent) {
+  const pt = cursorPoint.value || screenToSvg(e.clientX, e.clientY);
+
   if (editorStore.isSettingScale) {
-    const pt = screenToSvg(e.clientX, e.clientY);
     editorStore.addScalePoint(pt);
+    return;
   }
+
+  // Wall Drawing Tool
+  if (editorStore.activeTool === "wall") {
+    if (editorStore.drawingPoints.length === 0) {
+      editorStore.drawingPoints.push(pt);
+    } else {
+      const p0 = editorStore.drawingPoints[0];
+      if (Math.hypot(pt.x - p0.x, pt.y - p0.y) >= 10) {
+        planStore.addShape({
+          id: "wall_" + Math.random().toString(36).substring(2, 9),
+          type: "wall",
+          geometry: {
+            x1: p0.x,
+            y1: p0.y,
+            x2: pt.x,
+            y2: pt.y,
+            thickness: editorStore.activeWallThickness,
+            openings: [],
+          },
+          style: {
+            stroke: editorStore.activeWallColor,
+          },
+        });
+        if (e.shiftKey) {
+          // Chain connected walls
+          editorStore.drawingPoints = [pt];
+        } else {
+          editorStore.drawingPoints = [];
+        }
+      }
+    }
+    return;
+  }
+
+  // Room Polygon Tool
+  if (editorStore.activeTool === "room") {
+    if (editorStore.drawingPoints.length >= 3) {
+      const p0 = editorStore.drawingPoints[0];
+      if (Math.hypot(pt.x - p0.x, pt.y - p0.y) < 20) {
+        closeRoomPolygon();
+        return;
+      }
+    }
+    editorStore.drawingPoints.push(pt);
+    return;
+  }
+
+  // Architectural Label Tool
+  if (editorStore.activeTool === "label") {
+    const text = prompt("Enter label text:", "Room / Area");
+    if (text && text.trim()) {
+      planStore.addShape({
+        id: "lbl_" + Math.random().toString(36).substring(2, 9),
+        type: "label",
+        geometry: {
+          x: pt.x,
+          y: pt.y,
+          text: text.trim(),
+          fontSize: 13,
+        },
+        style: {
+          color: "#cbd5e1",
+        },
+      });
+    }
+    return;
+  }
+}
+
+function handleCanvasDoubleClick() {
+  if (editorStore.activeTool === "room" && editorStore.drawingPoints.length >= 3) {
+    closeRoomPolygon();
+  }
+}
+
+function closeRoomPolygon() {
+  const name = prompt("Enter room name:", "Living Room") || "Room";
+  planStore.addShape({
+    id: "rm_" + Math.random().toString(36).substring(2, 9),
+    type: "room",
+    geometry: {
+      points: [...editorStore.drawingPoints.map((p) => [p.x, p.y] as [number, number])],
+      name,
+    },
+    style: {
+      fill: editorStore.activeRoomFill,
+      stroke: editorStore.activeRoomStroke,
+    },
+  });
+  editorStore.drawingPoints = [];
+}
+
+function handleWallClick(wallId: string, clickPoint: { x: number; y: number }) {
+  const wall = planStore.currentShapes.find((s) => s.id === wallId && s.type === "wall");
+  if (!wall) return;
+
+  const geom = wall.geometry as WallGeometry;
+  const dx = geom.x2 - geom.x1;
+  const dy = geom.y2 - geom.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 30) return;
+
+  const ux = dx / len;
+  const uy = dy / len;
+  // Project click onto wall vector
+  const proj = (clickPoint.x - geom.x1) * ux + (clickPoint.y - geom.y1) * uy;
+  const offset = Math.max(10, Math.min(len - 45, Math.round(proj - 18)));
+
+  const opType = editorStore.activeTool === "window" ? "window" : "door";
+  planStore.addWallOpening(wallId, {
+    id: "op_" + Math.random().toString(36).substring(2, 9),
+    type: opType,
+    offset,
+    width: 36,
+  });
 }
 
 function handleEndpointSelect(ep: Endpoint, e: MouseEvent) {
@@ -208,6 +346,7 @@ function onDrop(e: DragEvent) {
       ref="svgRef"
       class="editor-svg"
       @click="handleCanvasClick"
+      @dblclick="handleCanvasDoubleClick"
     >
       <SvgDefs />
 
@@ -218,6 +357,15 @@ function onDrop(e: DragEvent) {
       <g :transform="`translate(${editorStore.panX}, ${editorStore.panY}) scale(${editorStore.zoom})`">
         <!-- Background plan image -->
         <BackgroundLayer :background="planStore.currentFloor?.background || null" />
+
+        <!-- Architectural Vector Shapes Layer (Rooms, Walls, Openings, Labels, Snapping) -->
+        <ShapesLayer
+          :shapes="planStore.currentShapes"
+          :active-snap-point="currentSnapResult"
+          :cursor-point="cursorPoint"
+          @select-shape="editorStore.selectShape"
+          @wall-click="handleWallClick"
+        />
 
         <!-- Sub-Areas / Rooms Layer -->
         <g class="sub-areas-layer" v-if="planStore.currentSubAreas.length > 0">

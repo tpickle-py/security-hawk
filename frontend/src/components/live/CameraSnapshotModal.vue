@@ -3,9 +3,17 @@ import { ref, onMounted, onUnmounted } from "vue";
 import { api } from "@/services/api";
 import type { Endpoint } from "@/types/plan";
 
-const props = defineProps<{
-  endpoint: Endpoint;
-}>();
+const props = withDefaults(
+  defineProps<{
+    endpoint: Endpoint;
+    autoDismissSeconds?: number;
+    triggeredBy?: string;
+  }>(),
+  {
+    autoDismissSeconds: 0,
+    triggeredBy: "",
+  }
+);
 
 const emit = defineEmits<{
   (e: "close"): void;
@@ -14,8 +22,11 @@ const emit = defineEmits<{
 const snapshotUrl = ref<string>("");
 const lastUpdatedTime = ref<string>("");
 const isMaximized = ref(false);
+const isHovered = ref(false);
+const remainingSeconds = ref(props.autoDismissSeconds);
 const modalContainerRef = ref<HTMLDivElement | null>(null);
 let refreshTimer: number | null = null;
+let countdownInterval: number | null = null;
 
 function refreshSnapshot() {
   snapshotUrl.value = api.getCameraSnapshotUrl(props.endpoint.entity_id);
@@ -48,6 +59,19 @@ onMounted(() => {
   // Auto-refresh snapshot every 2.5 seconds
   refreshTimer = window.setInterval(refreshSnapshot, 2500);
 
+  // Auto-dismiss countdown if enabled
+  if (props.autoDismissSeconds > 0) {
+    remainingSeconds.value = props.autoDismissSeconds;
+    countdownInterval = window.setInterval(() => {
+      if (!isHovered.value && remainingSeconds.value > 0) {
+        remainingSeconds.value -= 1;
+        if (remainingSeconds.value <= 0) {
+          emit("close");
+        }
+      }
+    }, 1000);
+  }
+
   window.addEventListener("keydown", handleKeydown, true);
 
   // Focus modal container so keyboard/remote events route properly
@@ -56,6 +80,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer);
+  if (countdownInterval) clearInterval(countdownInterval);
   window.removeEventListener("keydown", handleKeydown, true);
 });
 </script>
@@ -67,14 +92,30 @@ onUnmounted(() => {
       class="camera-window glass-panel"
       :class="{ maximized: isMaximized }"
       tabindex="-1"
+      @mouseenter="isHovered = true"
+      @mouseleave="isHovered = false"
       @click.stop
     >
+      <!-- Auto-dismiss Countdown Indicator -->
+      <div v-if="autoDismissSeconds > 0" class="auto-dismiss-bar">
+        <div
+          class="countdown-progress"
+          :style="{ width: `${(remainingSeconds / autoDismissSeconds) * 100}%` }"
+        ></div>
+        <div class="countdown-text">
+          <span v-if="triggeredBy">Triggered by <strong>{{ triggeredBy }}</strong> • </span>
+          <span>Closing in {{ remainingSeconds }}s</span>
+          <span class="hover-notice" v-if="isHovered">(Paused)</span>
+        </div>
+      </div>
+
       <!-- Window Title Bar -->
       <div class="window-titlebar">
         <div class="title-left">
           <span class="live-dot" title="Live stream"></span>
           <span class="window-title">{{ endpoint.label || endpoint.entity_id }}</span>
           <span class="window-badge">LIVE CAMERA</span>
+          <span v-if="triggeredBy" class="alert-trigger-badge">SENSOR ALERT</span>
         </div>
 
         <div class="window-controls">
@@ -300,5 +341,51 @@ onUnmounted(() => {
 
 .action-btn:hover {
   background: var(--accent-primary);
+}
+
+.auto-dismiss-bar {
+  position: relative;
+  height: 24px;
+  background: rgba(239, 68, 68, 0.15);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.countdown-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(239, 68, 68, 0.35);
+  transition: width 1s linear;
+}
+
+.countdown-text {
+  position: relative;
+  z-index: 2;
+  font-size: 11px;
+  padding: 0 12px;
+  color: #fca5a5;
+  font-weight: 500;
+}
+
+.hover-notice {
+  font-weight: 700;
+  color: #ffffff;
+  margin-left: 6px;
+}
+
+.alert-trigger-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  animation: pulse-glow 1.2s infinite;
 }
 </style>

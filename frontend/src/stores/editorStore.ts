@@ -2,15 +2,33 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { ScalePoint } from "@/types/plan";
 
-export type EditorTool = "select" | "pan" | "scale" | "place_endpoint" | "sub_area";
+export type EditorTool =
+  | "select"
+  | "pan"
+  | "scale"
+  | "place_endpoint"
+  | "sub_area"
+  | "wall"
+  | "room"
+  | "door"
+  | "window"
+  | "label";
 
 export const useEditorStore = defineStore("editor", () => {
   const mode = ref<"design" | "usage">("design");
   const activeTool = ref<EditorTool>("select");
   const selectedEndpointIds = ref<string[]>([]);
+  const selectedShapeId = ref<string | null>(null);
 
   // Backward compatibility single-select getter
   const selectedEndpointId = computed(() => selectedEndpointIds.value[0] || null);
+
+  // Active drawing state
+  const drawingPoints = ref<Array<{ x: number; y: number }>>([]);
+  const activeWallThickness = ref<number>(8);
+  const activeWallColor = ref<string>("#94a3b8");
+  const activeRoomFill = ref<string>("rgba(99, 102, 241, 0.12)");
+  const activeRoomStroke = ref<string>("#6366f1");
 
   // Pan & Zoom
   const zoom = ref(1.0);
@@ -26,14 +44,18 @@ export const useEditorStore = defineStore("editor", () => {
     mode.value = m;
     if (m === "usage") {
       selectedEndpointIds.value = [];
+      selectedShapeId.value = null;
       activeTool.value = "select";
+      drawingPoints.value = [];
     }
   }
 
   function setTool(tool: EditorTool) {
     activeTool.value = tool;
+    drawingPoints.value = [];
     if (tool !== "select") {
       selectedEndpointIds.value = [];
+      selectedShapeId.value = null;
     }
     if (tool !== "scale") {
       scalePoint1.value = null;
@@ -63,9 +85,6 @@ export const useEditorStore = defineStore("editor", () => {
     selectedEndpointIds.value = [...ids];
   }
 
-  function clearSelection() {
-    selectedEndpointIds.value = [];
-  }
 
   function isEndpointSelected(id: string): boolean {
     return selectedEndpointIds.value.includes(id);
@@ -100,6 +119,19 @@ export const useEditorStore = defineStore("editor", () => {
     }
   }
 
+  function selectShape(id: string | null) {
+    selectedShapeId.value = id;
+    if (id) {
+      selectedEndpointIds.value = [];
+      activeTool.value = "select";
+    }
+  }
+
+  function clearSelection() {
+    selectedEndpointIds.value = [];
+    selectedShapeId.value = null;
+  }
+
   function cancelScaleCalibration() {
     scalePoint1.value = null;
     scalePoint2.value = null;
@@ -112,6 +144,12 @@ export const useEditorStore = defineStore("editor", () => {
     activeTool,
     selectedEndpointIds,
     selectedEndpointId,
+    selectedShapeId,
+    drawingPoints,
+    activeWallThickness,
+    activeWallColor,
+    activeRoomFill,
+    activeRoomStroke,
     zoom,
     panX,
     panY,
@@ -122,6 +160,7 @@ export const useEditorStore = defineStore("editor", () => {
     setTool,
     selectEndpoint,
     selectAll,
+    selectShape,
     clearSelection,
     isEndpointSelected,
     resetView,
