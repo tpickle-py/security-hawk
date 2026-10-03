@@ -94,3 +94,13 @@ def list_action_plugins(request: HttpRequest) -> JsonResponse:
 
     plugins = action_registry.list_plugins()
     return JsonResponse({"plugins": plugins})
+
+
+def worker_status(request: HttpRequest) -> JsonResponse:
+    """GET /api/rules/worker-status/ to get runtime stats for the background rule worker."""
+    if request.method != "GET":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+
+    from rules.worker import rule_worker
+
+    return JsonResponse(rule_worker.get_stats())

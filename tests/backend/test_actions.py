@@ -274,3 +274,124 @@ async def test_action_plugins_api_endpoint(async_client):
     assert "email" in types
     assert "whatsapp" in types
     assert "webhook" in types
+    assert "discord" in types
+    assert "slack" in types
+    assert "telegram" in types
+
+
+@pytest.mark.asyncio
+async def test_discord_action_plugin():
+    from rules.actions.discord import DiscordActionPlugin
+
+    plugin = DiscordActionPlugin()
+    ctx = ActionContext(
+        rule_id="r_discord",
+        rule_name="Front Yard Intrusion",
+        triggered_by=["binary_sensor.front_yard_motion"],
+        time_epoch=time.time(),
+        output_entity_id="binary_sensor.sec_front_yard",
+    )
+
+    mock_resp = AsyncMock()
+    mock_resp.status = 204
+
+    with patch("aiohttp.ClientSession.post") as mock_post:
+        mock_post.return_value.__aenter__.return_value = mock_resp
+
+        res = await plugin.execute(
+            {
+                "webhook_url": "https://discord.com/api/webhooks/123/abc",
+                "content": "Intrusion alert: {rule_name}",
+                "username": "Security Hawk Bot",
+                "color": "#ef4444",
+            },
+            ctx,
+        )
+        assert res.success is True
+        assert "Discord" in res.message
+        assert mock_post.called
+
+    # Missing webhook URL
+    err_res = await plugin.execute({"webhook_url": ""}, ctx)
+    assert err_res.success is False
+
+
+@pytest.mark.asyncio
+async def test_slack_action_plugin():
+    from rules.actions.slack import SlackActionPlugin
+
+    plugin = SlackActionPlugin()
+    ctx = ActionContext(
+        rule_id="r_slack",
+        rule_name="Server Rack Thermal Alert",
+        triggered_by=["sensor.server_temp"],
+        time_epoch=time.time(),
+    )
+
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+
+    with patch("aiohttp.ClientSession.post") as mock_post:
+        mock_post.return_value.__aenter__.return_value = mock_resp
+
+        res = await plugin.execute(
+            {
+                "webhook_url": "https://hooks.slack.com/services/T00/B00/X00",
+                "channel": "#alerts",
+                "message": "Temperature exceeded in {rule_name}",
+            },
+            ctx,
+        )
+        assert res.success is True
+        assert "Slack" in res.message
+        assert mock_post.called
+
+    # Missing webhook URL
+    err_res = await plugin.execute({"webhook_url": ""}, ctx)
+    assert err_res.success is False
+
+
+@pytest.mark.asyncio
+async def test_telegram_action_plugin():
+    from rules.actions.telegram import TelegramActionPlugin
+
+    plugin = TelegramActionPlugin()
+    ctx = ActionContext(
+        rule_id="r_tg",
+        rule_name="Back Door Ajar",
+        triggered_by=["binary_sensor.back_door"],
+        time_epoch=time.time(),
+    )
+
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+
+    with patch("aiohttp.ClientSession.post") as mock_post:
+        mock_post.return_value.__aenter__.return_value = mock_resp
+
+        res = await plugin.execute(
+            {
+                "bot_token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+                "chat_id": "-1001234567890",
+                "message": "Security Alert: {rule_name} triggered by {entities}",
+            },
+            ctx,
+        )
+        assert res.success is True
+        assert "Telegram" in res.message
+        assert mock_post.called
+
+    # Missing required config
+    err_res = await plugin.execute({"bot_token": "", "chat_id": ""}, ctx)
+    assert err_res.success is False
+
+
+@pytest.mark.asyncio
+async def test_worker_status_api_endpoint(async_client):
+    resp = await async_client.get("/api/rules/worker-status/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "queue_depth" in data
+    assert "events_enqueued" in data
+    assert "events_processed" in data
+    assert "max_queue_size" in data

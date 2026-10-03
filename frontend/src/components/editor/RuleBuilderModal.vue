@@ -508,7 +508,7 @@ async function handleTest() {
             </div>
 
             <div v-if="actions.length === 0" class="empty-actions-box">
-              <span>No notification actions configured. The synthetic sensor state and live camera popup will still trigger. Add an action above to send Email, WhatsApp messages, call Home Assistant services, or trigger webhooks.</span>
+              <span>No notification actions configured. The synthetic sensor state and live camera popup will still trigger. Add an action above to send Email, WhatsApp, Discord, Slack, or Telegram messages, call Home Assistant services, or trigger webhooks.</span>
             </div>
 
             <div v-else class="actions-list">
@@ -522,7 +522,14 @@ async function handleTest() {
                 <div class="action-card-header">
                   <div class="action-header-left">
                     <span class="action-icon">
-                      {{ act.type === 'ha_service' ? '🏠' : act.type === 'email' ? '✉️' : act.type === 'whatsapp' ? '💬' : '🌐' }}
+                      {{
+                        act.type === 'ha_service' ? '🏠' :
+                        act.type === 'email' ? '✉️' :
+                        act.type === 'whatsapp' ? '💬' :
+                        act.type === 'discord' ? '🎮' :
+                        act.type === 'slack' ? '💼' :
+                        act.type === 'telegram' ? '✈️' : '🌐'
+                      }}
                     </span>
                     <select
                       :value="act.type"

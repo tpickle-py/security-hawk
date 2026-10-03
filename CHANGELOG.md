@@ -13,8 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Home Assistant Service (`ha_service`)**: Call native HA services (`alarm_control_panel.alarm_trigger`, `notify`, `light.turn_on`, sirens).
   - **Email Notification (`email`)**: Send formatted SMTP alert emails with variable interpolation (`{rule_name}`, `{entities}`) and TLS encryption.
   - **WhatsApp Messages (`whatsapp`)**: Dispatch instant WhatsApp alerts via CallMeBot (free for HA), Twilio API, or custom webhook gateways.
-  - **Custom Webhook / HTTP (`webhook`)**: Send HTTP POST/GET requests with custom JSON payloads and headers to external endpoints (Discord, Slack, automation servers).
+  - **Discord Alerts (`discord`)**: Dispatch rich color-coded incident cards and embeds to Discord server channels via incoming webhooks.
+  - **Slack Notifications (`slack`)**: Post Block Kit formatted alert notifications directly to Slack channels via incoming webhooks.
+  - **Telegram Bot Notifications (`telegram`)**: Send real-time instant alerts directly to Telegram users, groups, or channels via Telegram Bot API `sendMessage`.
+  - **Custom Webhook / HTTP (`webhook`)**: Send HTTP POST/GET requests with custom JSON payloads and headers to external endpoints or automation servers.
   - **Global Notification Defaults**: Settings page tab for global SMTP and WhatsApp credentials, automatically inherited by rules.
+- **Decoupled Background Rule Worker & Event Queue**: Dedicated asynchronous background consumer (`RuleEventWorker`) with `asyncio.Queue` decoupling rule matching, time-window evaluation, and external network actions completely from the main Home Assistant WebSocket pump and frontend broadcasts. Includes runtime telemetry endpoint `GET /api/rules/worker-status/`.
 - **MQTT Information Store & Home Assistant MQTT Discovery**: Lightweight zero-dependency async MQTT 3.1.1 client that publishes state changes and automatic Home Assistant MQTT Discovery payloads (`homeassistant/binary_sensor/security_hawk_<rule_id>/config`) with retain support and authentication.
 - **Application & Integration Settings**: Dedicated Settings modal to configure automation behaviors (Quiet Return timeout, Camera Snapshot dismiss timeout, default startup view), MQTT broker parameters, and one-click Home Assistant synthetic helper registration.
 - **Canvas Synthetic / Composite Endpoints**: Rules and synthetic sensors can now be browsed, tested, and dragged directly from the "⚡ Rules" tab in EntityPicker onto the floor plan canvas as interactive `composite` endpoints with pulsing alert rings.

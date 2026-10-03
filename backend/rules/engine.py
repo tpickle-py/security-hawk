@@ -28,7 +28,8 @@ class RulesEngine:
 
     def __init__(self) -> None:
         self._recent_events: dict[str, dict[str, Any]] = {}
-        self._reset_tasks: dict[str, asyncio.Task] = {}
+        self._reset_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._ha_client = HARestClient()
 
     def record_event(self, entity_id: str, state: str) -> None:
@@ -104,7 +105,12 @@ class RulesEngine:
         else:  # ANY
             return any(condition_results), matched_entities
 
-    async def execute_rule(self, rule: dict[str, Any], triggering_entities: list[str]) -> None:
+    async def execute_rule(
+        self,
+        rule: dict[str, Any],
+        triggering_entities: list[str],
+        wait_actions: bool = False,
+    ) -> None:
         """Execute actions: publish to HA, MQTT, optional service call, and notify UI."""
         rule_id = rule["id"]
         output_eid = rule.get("output_entity_id") or f"binary_sensor.security_hawk_{rule_id}"
@@ -150,7 +156,7 @@ class RulesEngine:
             except Exception as e:
                 logger.debug("Failed to publish MQTT state: %s", e)
 
-        # 3. Execute pluggable and expandable actions (HA service, Email, WhatsApp, Webhook)
+        # 3. Execute pluggable and expandable actions (HA service, Email, WhatsApp, Discord, Slack, etc.)
         action_ctx = ActionContext(
             rule_id=rule_id,
             rule_name=rule_name,
@@ -160,14 +166,19 @@ class RulesEngine:
             extra={"device_class": device_class, "attributes": attributes},
         )
         actions = rule.get("actions") or []
-        try:
-            await action_registry.execute_actions(
-                actions=actions,
-                context=action_ctx,
-                legacy_service_call=rule.get("service_call"),
-            )
-        except Exception as e:
-            logger.error("Error executing actions for rule '%s': %s", rule_name, e)
+        if wait_actions:
+            await self._dispatch_actions(actions, action_ctx, rule.get("service_call"))
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                task = loop.create_task(
+                    self._dispatch_actions(actions, action_ctx, rule.get("service_call")),
+                    name=f"dispatch_actions_{rule_id}",
+                )
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
+            except RuntimeError:
+                await self._dispatch_actions(actions, action_ctx, rule.get("service_call"))
 
         # 4. Broadcast state update to connected frontend floor plans
         channel_layer = get_channel_layer()
@@ -246,6 +257,25 @@ class RulesEngine:
             pass
         finally:
             self._reset_tasks.pop(rule_id, None)
+
+    async def _dispatch_actions(
+        self,
+        actions: list[dict[str, Any]],
+        context: ActionContext,
+        legacy_service_call: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """Dispatch actions concurrently via action plugin registry."""
+        try:
+            results = await action_registry.execute_actions(actions, context, legacy_service_call)
+            for res in results:
+                if not res.success:
+                    logger.warning("Action %s for rule '%s' failed: %s", res.action_type, context.rule_name, res.message)
+                else:
+                    logger.debug("Action %s executed successfully: %s", res.action_type, res.message)
+            return results
+        except Exception as e:
+            logger.error("Error executing action plugins for rule '%s': %s", context.rule_name, e)
+            return []
 
 
 rules_engine = RulesEngine()

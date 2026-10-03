@@ -6,8 +6,11 @@ import logging
 from typing import Any
 
 from rules.actions.base import ActionContext, ActionResult, BaseActionPlugin
+from rules.actions.discord import DiscordActionPlugin
 from rules.actions.email import EmailActionPlugin
 from rules.actions.ha_service import HaServiceActionPlugin
+from rules.actions.slack import SlackActionPlugin
+from rules.actions.telegram import TelegramActionPlugin
 from rules.actions.webhook import WebhookActionPlugin
 from rules.actions.whatsapp import WhatsAppActionPlugin
 
@@ -26,6 +29,9 @@ class ActionPluginRegistry:
         self.register(HaServiceActionPlugin())
         self.register(EmailActionPlugin())
         self.register(WhatsAppActionPlugin())
+        self.register(DiscordActionPlugin())
+        self.register(SlackActionPlugin())
+        self.register(TelegramActionPlugin())
         self.register(WebhookActionPlugin())
 
     def register(self, plugin: BaseActionPlugin) -> None:
