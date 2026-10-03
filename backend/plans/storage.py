@@ -55,23 +55,36 @@ class PlanStorage:
         return sorted(plans, key=lambda p: p["modified"], reverse=True)
 
     def load(self, plan_id: str) -> dict | None:
-        """Load a plan by ID. Returns None if not found."""
+        """Load a plan by ID. Automatically migrates older schema versions."""
+        from plans.migrations import migrate_plan_data
+
         path = self._plan_path(plan_id)
         if not os.path.exists(path):
             return None
         with open(path) as f:
-            return json.load(f)
+            data = json.load(f)
+
+        migrated_data, was_modified = migrate_plan_data(data)
+        if was_modified:
+            # Silently persist the upgraded schema
+            with open(path, "w") as f:
+                json.dump(migrated_data, f, indent=2)
+
+        return migrated_data
 
     def save(self, plan_id: str, data: dict) -> None:
         """Save a plan, creating a version snapshot of the previous state."""
+        from plans.migrations import migrate_plan_data
+
         path = self._plan_path(plan_id)
+        migrated_data, _ = migrate_plan_data(data)
 
         # Snapshot current version before overwriting
         if os.path.exists(path):
             self._save_version(plan_id, path)
 
         with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(migrated_data, f, indent=2)
 
         logger.info("Saved plan %s", plan_id)
 

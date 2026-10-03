@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { Site, Floor, Endpoint, Scale, BackgroundAsset, SubArea } from "@/types/plan";
 import { api } from "@/services/api";
+import { useHistoryStore } from "@/stores/historyStore";
 
 export const usePlanStore = defineStore("plan", () => {
   const currentPlanId = ref<string | null>(null);
@@ -50,6 +51,7 @@ export const usePlanStore = defineStore("plan", () => {
       // Select overview or first floor
       currentBuildingId.value = null;
       currentFloorId.value = null;
+      useHistoryStore().clear();
     } catch (e: any) {
       error.value = e.message || "Failed to load plan";
       throw e;
@@ -60,11 +62,37 @@ export const usePlanStore = defineStore("plan", () => {
 
   let saveTimeout: number | null = null;
 
+  function snapshotBeforeMutation() {
+    if (site.value) {
+      useHistoryStore().pushState(site.value);
+    }
+  }
+
   function markDirtyAndAutosave() {
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = window.setTimeout(() => {
       savePlan();
     }, 1000);
+  }
+
+  function performUndo() {
+    if (!site.value) return;
+    const historyStore = useHistoryStore();
+    const prev = historyStore.undo(site.value);
+    if (prev) {
+      site.value = prev;
+      savePlan();
+    }
+  }
+
+  function performRedo() {
+    if (!site.value) return;
+    const historyStore = useHistoryStore();
+    const next = historyStore.redo(site.value);
+    if (next) {
+      site.value = next;
+      savePlan();
+    }
   }
 
   async function savePlan() {
@@ -95,6 +123,7 @@ export const usePlanStore = defineStore("plan", () => {
 
   function addEndpoint(endpoint: Endpoint) {
     if (!site.value) return;
+    snapshotBeforeMutation();
     if (isOverview.value) {
       site.value.overview.endpoints.push(endpoint);
     } else {
@@ -115,6 +144,7 @@ export const usePlanStore = defineStore("plan", () => {
     if (!list) return;
     const idx = list.findIndex((ep) => ep.id === endpointId);
     if (idx !== -1) {
+      snapshotBeforeMutation();
       list[idx] = { ...list[idx], ...updates };
       markDirtyAndAutosave();
     }
@@ -122,6 +152,7 @@ export const usePlanStore = defineStore("plan", () => {
 
   function removeEndpoint(endpointId: string) {
     if (!site.value) return;
+    snapshotBeforeMutation();
     if (isOverview.value) {
       site.value.overview.endpoints = site.value.overview.endpoints.filter((ep) => ep.id !== endpointId);
     } else {
@@ -135,6 +166,7 @@ export const usePlanStore = defineStore("plan", () => {
 
   function setBackground(asset: BackgroundAsset | null) {
     if (!site.value) return;
+    snapshotBeforeMutation();
     if (isOverview.value) {
       site.value.overview.background = asset;
     } else {
@@ -148,6 +180,7 @@ export const usePlanStore = defineStore("plan", () => {
 
   function setScale(scale: Scale | null) {
     if (!site.value) return;
+    snapshotBeforeMutation();
     if (isOverview.value) {
       site.value.overview.scale = scale;
     } else {
@@ -164,6 +197,7 @@ export const usePlanStore = defineStore("plan", () => {
     const list = isOverview.value ? site.value.overview.endpoints : currentFloor.value?.endpoints;
     if (!list) return;
 
+    snapshotBeforeMutation();
     for (const ep of list) {
       if (endpointIds.includes(ep.id)) {
         ep.x += dx;
@@ -178,6 +212,7 @@ export const usePlanStore = defineStore("plan", () => {
     const list = isOverview.value ? site.value.overview.endpoints : currentFloor.value?.endpoints;
     if (!list) return;
 
+    snapshotBeforeMutation();
     const newGroupId = "grp_" + Math.random().toString(36).substring(2, 8);
     for (const ep of list) {
       if (endpointIds.includes(ep.id)) {
@@ -193,6 +228,7 @@ export const usePlanStore = defineStore("plan", () => {
     const list = isOverview.value ? site.value.overview.endpoints : currentFloor.value?.endpoints;
     if (!list) return;
 
+    snapshotBeforeMutation();
     for (const ep of list) {
       if (endpointIds.includes(ep.id)) {
         ep.group_id = null;
@@ -212,6 +248,7 @@ export const usePlanStore = defineStore("plan", () => {
 
   function addSubArea(subArea: SubArea) {
     if (!currentFloor.value) return;
+    snapshotBeforeMutation();
     if (!currentFloor.value.sub_areas) {
       currentFloor.value.sub_areas = [];
     }
@@ -221,6 +258,7 @@ export const usePlanStore = defineStore("plan", () => {
 
   function removeSubArea(subAreaId: string) {
     if (!currentFloor.value || !currentFloor.value.sub_areas) return;
+    snapshotBeforeMutation();
     currentFloor.value.sub_areas = currentFloor.value.sub_areas.filter((s) => s.id !== subAreaId);
     markDirtyAndAutosave();
   }
@@ -252,6 +290,8 @@ export const usePlanStore = defineStore("plan", () => {
     nestEndpoint,
     addSubArea,
     removeSubArea,
+    performUndo,
+    performRedo,
     setBackground,
     setScale,
   };

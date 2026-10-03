@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from plans.sanitize import sanitize_svg
-from plans.schema import default_plan, new_plan_id
+from plans.schema import default_plan, new_plan_id, validate_plan
 from plans.storage import PlanStorage
 
 logger = logging.getLogger(__name__)
@@ -235,3 +235,73 @@ def _update_placed_entities(plan_id: str, plan_data: dict) -> None:
                 entity_ids.update(ep.get("companions", []))
 
     state_manager.load_placed_entities(plan_id, entity_ids)
+
+
+@require_GET
+def export_plan(request, plan_id):
+    """Export a plan as a downloadable JSON file attachment."""
+    from django.http import HttpResponse
+    from django.utils.text import slugify
+
+    plan = get_storage().load(plan_id)
+    if not plan:
+        return JsonResponse({"error": "Plan not found"}, status=404)
+
+    safe_name = slugify(plan.get("name", plan_id)) or "floorplan"
+    filename = f"{safe_name}_plan.json"
+
+    response = HttpResponse(
+        json.dumps(plan, indent=2),
+        content_type="application/json",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@csrf_exempt
+@require_POST
+def import_plan(request, plan_id=None):
+    """Import a plan from an uploaded JSON file or request body."""
+    from plans.migrations import migrate_plan_data
+
+    # Check for file upload or body payload
+    if request.FILES and "file" in request.FILES:
+        try:
+            uploaded_file = request.FILES["file"]
+            raw_content = uploaded_file.read().decode("utf-8")
+            data = json.loads(raw_content)
+        except Exception as e:
+            return JsonResponse({"error": f"Failed to read uploaded JSON file: {e}"}, status=400)
+    else:
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+    if not isinstance(data, dict):
+        return JsonResponse({"error": "Plan payload must be a JSON object"}, status=400)
+
+    # Automatically migrate schema if older version
+    migrated_data, was_migrated = migrate_plan_data(data)
+
+    errors = validate_plan(migrated_data)
+    if errors:
+        return JsonResponse({"error": "Validation failed", "details": errors}, status=400)
+
+    # Determine plan ID (use provided, or extract from data, or generate new)
+    target_id = plan_id or data.get("id") or str(uuid.uuid4())[:8]
+
+    # Save to storage (will automatically snapshot previous version if existing)
+    get_storage().save(target_id, migrated_data)
+    _update_placed_entities(target_id, migrated_data)
+
+    logger.info("Imported plan %s (migrated: %s)", target_id, was_migrated)
+    return JsonResponse(
+        {
+            "status": "imported",
+            "plan_id": target_id,
+            "plan": migrated_data,
+            "migrated": was_migrated,
+        }
+    )
+

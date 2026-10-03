@@ -21,7 +21,10 @@ def test_save_and_load(storage: PlanStorage) -> None:
     storage.save("plan_1", data)
 
     loaded = storage.load("plan_1")
-    assert loaded == data
+    assert loaded is not None
+    assert loaded["name"] == "Test Floor"
+    assert loaded["schema_version"] == 2
+    assert "overview" in loaded
 
 
 def test_load_nonexistent(storage: PlanStorage) -> None:
