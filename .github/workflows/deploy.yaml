@@ -63,11 +63,12 @@ jobs:
     needs: build
     name: Dispatch Update to ha-addons
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && secrets.UPDATER_TOKEN != ''
+    continue-on-error: true
     steps:
       - name: Trigger ha-addons updater
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.UPDATER_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.UPDATER_TOKEN }}
           repository: tpickle-py/ha-addons
           event-type: update
