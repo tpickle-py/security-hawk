@@ -46,6 +46,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "from_phone": "",
         },
     },
+    "ignored_entities": [],
+    "ignored_domains": [],
 }
 
 

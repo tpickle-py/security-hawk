@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { usePlanStore } from "@/stores/planStore";
+import { useLiveStore } from "@/stores/liveStore";
 import { useWebSocket } from "@/composables/useWebSocket";
 import { api } from "@/services/api";
 
@@ -10,6 +11,7 @@ import ConnectionBanner from "@/components/shared/ConnectionBanner.vue";
 
 const route = useRoute();
 const planStore = usePlanStore();
+const liveStore = useLiveStore();
 
 const isReady = ref(false);
 const errorMsg = ref<string | null>(null);
@@ -85,6 +87,7 @@ onUnmounted(() => {
       <div class="kiosk-status-pill glass-panel">
         <span class="hawk-badge">HAWK</span>
         <span class="floor-title">{{ planStore.isOverview ? 'Site Overview' : (planStore.currentFloor?.name || 'Floor') }}</span>
+        <span class="kiosk-viewers-badge" title="Connected screens">👁️ {{ liveStore.viewerCount }}</span>
       </div>
     </div>
   </div>
@@ -158,5 +161,14 @@ onUnmounted(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+.kiosk-viewers-badge {
+  font-size: 11px;
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  padding: 2px 7px;
+  border-radius: 10px;
 }
 </style>

@@ -262,5 +262,19 @@ export interface AppSettings {
   };
   notifications?: NotificationSettings;
   ignored_entities?: string[];
+  ignored_domains?: string[];
 }
+
+export interface KioskStatus {
+  kiosk_enabled: boolean;
+  kiosk_port: number;
+  kiosk_token: string;
+  active_viewers: {
+    total_viewers: number;
+    kiosk_viewers: number;
+    standard_viewers: number;
+    by_plan: Record<string, number>;
+  };
+}
+
 

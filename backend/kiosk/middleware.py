@@ -34,6 +34,10 @@ class KioskTokenMiddleware:
         is_kiosk_path = request.path.startswith("/kiosk")
 
         if is_kiosk_port or is_kiosk_path:
+            # Allow static assets, favicon, and frontend bundle files without requiring token check
+            if request.path.startswith(("/assets/", "/static/", "/favicon")):
+                return self.get_response(request)
+
             # Check if kiosk mode is enabled
             if not getattr(settings, "KIOSK_ENABLED", False) and is_kiosk_port:
                 return HttpResponseForbidden("Kiosk mode is disabled.")

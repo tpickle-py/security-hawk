@@ -26,7 +26,18 @@ useWebSocket(() => planStore.currentPlanId);
 const plansList = ref<Array<{ id: string; name: string }>>([]);
 const showNewPlanModal = ref(false);
 const showSettingsModal = ref(false);
+const settingsInitialTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications" | "kiosk">("behaviors");
 const newPlanName = ref("");
+
+function openKioskTab() {
+  settingsInitialTab.value = "kiosk";
+  showSettingsModal.value = true;
+}
+
+function openSettings(tab: "behaviors" | "mqtt" | "helpers" | "notifications" | "kiosk" = "behaviors") {
+  settingsInitialTab.value = tab;
+  showSettingsModal.value = true;
+}
 
 async function loadPlans() {
   try {
@@ -99,13 +110,25 @@ onMounted(() => {
         <SiteNav />
       </div>
 
-      <!-- Right Controls: Mode Toggle, Settings & Status -->
+      <!-- Right Controls: Mode Toggle, Viewers, Settings & Status -->
       <div class="right-section">
         <ModeToggle />
+
+        <!-- Active Viewers Pill -->
+        <div
+          class="viewers-pill"
+          :title="`${liveStore.viewerCount} screen(s) viewing this plan (${liveStore.totalViewers} total). Click to view kiosk links.`"
+          @click="openKioskTab"
+        >
+          <span class="viewers-icon">👁️</span>
+          <span class="viewers-count">{{ liveStore.viewerCount }}</span>
+          <span class="viewers-label">{{ liveStore.viewerCount === 1 ? 'screen' : 'screens' }}</span>
+        </div>
+
         <button
           class="settings-btn"
-          title="Application Settings (MQTT, Behaviors, HA Helpers)"
-          @click="showSettingsModal = true"
+          title="Application Settings (MQTT, Behaviors, Kiosk Links, HA Helpers)"
+          @click="openSettings('behaviors')"
         >
           <svg viewBox="0 0 24 24" width="16" height="16">
             <path fill="currentColor" d="M12 15.5A3.5 3.5 0 0 1 8.5 12A3.5 3.5 0 0 1 12 8.5A3.5 3.5 0 0 1 15.5 12A3.5 3.5 0 0 1 12 15.5M19.43 12.97C19.47 12.65 19.5 12.33 19.5 12C19.5 11.67 19.47 11.34 19.43 11L21.54 9.37C21.73 9.22 21.78 8.95 21.66 8.73L19.66 5.27C19.54 5.05 19.27 4.97 19.05 5.05L16.56 6.05C16.04 5.65 15.48 5.32 14.87 5.07L14.49 2.42C14.46 2.18 14.25 2 14 2H10C9.75 2 9.54 2.18 9.51 2.42L9.13 5.07C8.52 5.32 7.96 5.66 7.44 6.05L4.95 5.05C4.73 4.96 4.46 5.05 4.34 5.27L2.34 8.73C2.21 8.95 2.27 9.22 2.46 9.37L4.57 11C4.53 11.34 4.5 11.67 4.5 12C4.5 12.33 4.53 12.65 4.57 12.97L2.46 14.63C2.27 14.78 2.21 15.05 2.34 15.27L4.34 18.73C4.46 18.95 4.73 19.03 4.95 18.95L7.44 17.95C7.96 18.35 8.52 18.68 9.13 18.93L9.51 21.58C9.54 21.82 9.75 22 10 22H14C14.25 22 14.46 21.82 14.49 21.58L14.87 18.93C15.48 18.68 16.04 18.34 16.56 17.95L19.05 18.95C19.27 19.04 19.54 18.95 19.66 18.73L21.66 15.27C21.78 15.05 21.73 14.78 21.54 14.63L19.43 12.97Z"/>
@@ -159,6 +182,8 @@ onMounted(() => {
     <!-- Application & Integration Settings Modal -->
     <SettingsModal
       :show="showSettingsModal"
+      :initial-tab="settingsInitialTab"
+      :plans="plansList"
       @close="showSettingsModal = false"
     />
   </div>
@@ -363,5 +388,41 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
+}
+
+.viewers-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 20px;
+  font-size: 11px;
+  color: #c7d2fe;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.viewers-pill:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: #818cf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.viewers-icon {
+  font-size: 13px;
+}
+
+.viewers-count {
+  font-weight: 700;
+  color: #818cf8;
+}
+
+.viewers-label {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 </style>

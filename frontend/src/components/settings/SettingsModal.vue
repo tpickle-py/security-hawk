@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import type { AppSettings } from "@/types/plan";
-import { api } from "@/services/api";
+import { computed, ref, watch } from "vue";
+import type { AppSettings, KioskStatus } from "@/types/plan";
+import { api, getBasePath } from "@/services/api";
+import { useLiveStore } from "@/stores/liveStore";
 
 const props = defineProps<{
   show: boolean;
+  initialTab?: "behaviors" | "mqtt" | "helpers" | "notifications" | "kiosk";
+  plans?: Array<{ id: string; name: string }>;
 }>();
 
 const emit = defineEmits<{
@@ -12,7 +15,11 @@ const emit = defineEmits<{
   (e: "saved", settings: AppSettings): void;
 }>();
 
-const activeTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications">("behaviors");
+const liveStore = useLiveStore();
+
+const activeTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications" | "kiosk">(
+  props.initialTab || "behaviors"
+);
 
 const quietReturnSeconds = ref(120);
 const autoDismissCameraSeconds = ref(30);
@@ -46,6 +53,69 @@ const waApiKey = ref("");
 const waAccountSid = ref("");
 const waFromPhone = ref("");
 
+// Kiosk & Share Links State
+const kioskStatus = ref<KioskStatus | null>(null);
+const selectedKioskPlanId = ref<string>("");
+const kioskLinkType = ref<"direct" | "ingress">("direct");
+const showToken = ref(false);
+const copySuccess = ref(false);
+const tokenCopySuccess = ref(false);
+const availablePlans = ref<Array<{ id: string; name: string }>>([]);
+
+const computedKioskLink = computed(() => {
+  const planPart = selectedKioskPlanId.value ? `/${selectedKioskPlanId.value}` : "";
+  const token = kioskStatus.value?.kiosk_token || "";
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+
+  if (kioskLinkType.value === "direct") {
+    const host = window.location.hostname || "127.0.0.1";
+    const port = kioskStatus.value?.kiosk_port || 8100;
+    return `http://${host}:${port}/kiosk${planPart}${tokenParam}`;
+  } else {
+    const origin = window.location.origin;
+    const basePath = getBasePath();
+    return `${origin}${basePath}/#/kiosk${planPart}`;
+  }
+});
+
+async function copyKioskLink() {
+  try {
+    await navigator.clipboard.writeText(computedKioskLink.value);
+    copySuccess.value = true;
+    setTimeout(() => {
+      copySuccess.value = false;
+    }, 2500);
+  } catch (err) {
+    console.error("Clipboard copy failed", err);
+  }
+}
+
+async function copyKioskToken() {
+  if (!kioskStatus.value?.kiosk_token) return;
+  try {
+    await navigator.clipboard.writeText(kioskStatus.value.kiosk_token);
+    tokenCopySuccess.value = true;
+    setTimeout(() => {
+      tokenCopySuccess.value = false;
+    }, 2500);
+  } catch (err) {
+    console.error("Token copy failed", err);
+  }
+}
+
+function openKioskLink() {
+  window.open(computedKioskLink.value, "_blank");
+}
+
+async function refreshKioskStatus() {
+  try {
+    const status = await api.getKioskStatus();
+    kioskStatus.value = status;
+  } catch (err) {
+    console.error("Failed to refresh kiosk status", err);
+  }
+}
+
 const isLoading = ref(false);
 const isSaving = ref(false);
 const isSyncingHelpers = ref(false);
@@ -57,12 +127,28 @@ watch(
   () => props.show,
   async (isShowing) => {
     if (isShowing) {
+      if (props.initialTab) {
+        activeTab.value = props.initialTab;
+      }
       errorMessage.value = null;
       successMessage.value = null;
       syncResult.value = null;
+
+      if (props.plans && props.plans.length > 0) {
+        availablePlans.value = props.plans;
+      } else {
+        api.listPlans().then((res) => {
+          availablePlans.value = res.plans;
+        }).catch(() => {});
+      }
+
       try {
         isLoading.value = true;
         const res = await api.getSettings();
+        if (res.kiosk) {
+          kioskStatus.value = res.kiosk;
+        }
+
         const s = res.settings;
         quietReturnSeconds.value = s.quiet_return_seconds ?? 120;
         autoDismissCameraSeconds.value = s.auto_dismiss_camera_seconds ?? 30;
@@ -226,6 +312,14 @@ async function handleSyncHelpers() {
           @click="activeTab = 'notifications'"
         >
           <span class="tab-icon">🔔</span> Notification Defaults
+        </button>
+        <button
+          type="button"
+          class="nav-tab"
+          :class="{ active: activeTab === 'kiosk' }"
+          @click="activeTab = 'kiosk'"
+        >
+          <span class="tab-icon">🖥️</span> Kiosk & Share Links
         </button>
       </div>
 
@@ -501,6 +595,161 @@ async function handleSyncHelpers() {
                     For CallMeBot, send WhatsApp message: <code>I allow callmebot to send me messages</code> to <code>+34 644 44 44 44</code> to receive your free key.
                   </span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: KIOSK & SHARE LINKS -->
+          <div v-if="activeTab === 'kiosk'" class="tab-content">
+            <div class="form-section">
+              <div class="section-title">🖥️ Wall Display & Kiosk Share Link</div>
+              <p class="section-desc">
+                Generate dedicated shareable links for wall tablets, smart TVs, or Fully Kiosk Browser. Kiosk mode provides a hardened, read-only interface displaying live sensor statuses without editing controls.
+              </p>
+
+              <!-- Live Active Viewers Telemetry Card -->
+              <div class="viewers-telemetry-card">
+                <div class="telemetry-header">
+                  <div class="telemetry-title">
+                    <span class="live-dot pulse"></span>
+                    <span>Live Active Viewers</span>
+                  </div>
+                  <button type="button" class="btn-refresh-telemetry" @click="refreshKioskStatus" title="Refresh viewer count">
+                    🔄 Refresh
+                  </button>
+                </div>
+                <div class="telemetry-stats-grid">
+                  <div class="stat-box primary">
+                    <div class="stat-number">{{ kioskStatus?.active_viewers?.total_viewers ?? liveStore.totalViewers ?? 1 }}</div>
+                    <div class="stat-label">Total Connected Screens</div>
+                  </div>
+                  <div class="stat-box">
+                    <div class="stat-number">{{ kioskStatus?.active_viewers?.kiosk_viewers ?? 0 }}</div>
+                    <div class="stat-label">🖥️ Kiosk Displays</div>
+                  </div>
+                  <div class="stat-box">
+                    <div class="stat-number">{{ kioskStatus?.active_viewers?.standard_viewers ?? 1 }}</div>
+                    <div class="stat-label">💻 Editor / Live Viewers</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Link Generator Configuration -->
+              <div class="kiosk-config-card">
+                <div class="form-group">
+                  <label>Select Floor Plan</label>
+                  <select v-model="selectedKioskPlanId" class="form-select">
+                    <option value="">Overview / Default (Auto-selects active building floor)</option>
+                    <option v-for="plan in availablePlans" :key="plan.id" :value="plan.id">
+                      {{ plan.name }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>Link Access Route</label>
+                  <div class="route-selector">
+                    <button
+                      type="button"
+                      class="route-btn"
+                      :class="{ active: kioskLinkType === 'direct' }"
+                      @click="kioskLinkType = 'direct'"
+                    >
+                      <span class="route-icon">📺</span>
+                      <div class="route-details">
+                        <span class="route-title">Direct Port 8100 Link (Recommended)</span>
+                        <span class="route-subtitle">Standalone direct access for wall tablets, TVs, and tablets without HA login.</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      class="route-btn"
+                      :class="{ active: kioskLinkType === 'ingress' }"
+                      @click="kioskLinkType = 'ingress'"
+                    >
+                      <span class="route-icon">🔒</span>
+                      <div class="route-details">
+                        <span class="route-title">Home Assistant Ingress Link</span>
+                        <span class="route-subtitle">Internal kiosk route authenticated through your Home Assistant session.</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Share URL Display & Copy Actions -->
+                <div class="form-group share-link-group">
+                  <label>Shareable Kiosk URL</label>
+                  <div class="url-input-container">
+                    <input
+                      type="text"
+                      readonly
+                      :value="computedKioskLink"
+                      class="url-input"
+                      @click="copyKioskLink"
+                    />
+                    <button
+                      type="button"
+                      class="btn-copy-url"
+                      :class="{ copied: copySuccess }"
+                      @click="copyKioskLink"
+                    >
+                      {{ copySuccess ? '✓ Copied!' : '📋 Copy Link' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-open-url"
+                      @click="openKioskLink"
+                      title="Open Kiosk View in new browser tab"
+                    >
+                      ↗️ Open
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Port & Token Security Details -->
+                <div class="kiosk-status-strip">
+                  <div class="status-item">
+                    <span class="status-label">Port 8100 Status:</span>
+                    <span
+                      class="status-badge"
+                      :class="kioskStatus?.kiosk_enabled ? 'badge-success' : 'badge-warning'"
+                    >
+                      {{ kioskStatus?.kiosk_enabled ? '🟢 Enabled' : '🟡 Standby / Ingress' }}
+                    </span>
+                  </div>
+                  <div v-if="kioskStatus?.kiosk_token" class="status-item token-item">
+                    <span class="status-label">Security Token:</span>
+                    <code class="token-code">
+                      {{ showToken ? kioskStatus.kiosk_token : '••••••••••••••••••••••••' }}
+                    </code>
+                    <button
+                      type="button"
+                      class="btn-reveal"
+                      @click="showToken = !showToken"
+                      :title="showToken ? 'Hide token' : 'Reveal token'"
+                    >
+                      {{ showToken ? '🙈' : '👁️' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-copy-token"
+                      @click="copyKioskToken"
+                      title="Copy token to clipboard"
+                    >
+                      {{ tokenCopySuccess ? '✓' : '📋' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Device Setup Instructions -->
+              <div class="device-tips-box">
+                <div class="tips-title">💡 Wall Display & Tablet Setup Tips</div>
+                <ul class="tips-list">
+                  <li><strong>Fully Kiosk Browser (Android / Fire Tablet):</strong> Set the <em>Start URL</em> to the Direct Port 8100 link. Enable "Ignore SSL Warnings" and "Keep Screen On".</li>
+                  <li><strong>iPad / iOS:</strong> Open the link in Safari, tap <em>Share &rarr; Add to Home Screen</em>, and enable <em>Guided Access</em> in iOS Settings for kiosk lockdown.</li>
+                  <li><strong>Smart TVs & Raspberry Pi:</strong> Run Chromium in kiosk mode: <code>chromium-browser --kiosk --noerrdialogs "&lt;SHARE_URL&gt;"</code>.</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -926,5 +1175,334 @@ async function handleSyncHelpers() {
 
 .notif-icon {
   font-size: 16px;
+}
+
+/* Kiosk & Share Links Styles */
+.section-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.viewers-telemetry-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.telemetry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.telemetry-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c7d2fe;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.live-dot.pulse {
+  animation: pulse-dot 1.8s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.btn-refresh-telemetry {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-refresh-telemetry:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.telemetry-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stat-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
+}
+
+.stat-box.primary {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.stat-number {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.stat-box.primary .stat-number {
+  color: #818cf8;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.kiosk-config-card {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.route-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.route-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.route-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.route-btn.active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: #6366f1;
+}
+
+.route-icon {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+.route-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.route-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.route-subtitle {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.share-link-group {
+  margin-top: 2px;
+}
+
+.url-input-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.url-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #38bdf8;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: text;
+}
+
+.btn-copy-url {
+  background: #6366f1;
+  border: none;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-copy-url:hover {
+  background: #4f46e5;
+}
+
+.btn-copy-url.copied {
+  background: #10b981;
+}
+
+.btn-open-url {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-open-url:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.kiosk-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-label {
+  color: var(--text-muted);
+}
+
+.status-badge {
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.token-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.token-code {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 10px;
+  color: #e2e8f0;
+}
+
+.btn-reveal,
+.btn-copy-token {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+
+.btn-reveal:hover,
+.btn-copy-token:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.device-tips-box {
+  background: rgba(30, 41, 59, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.tips-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.tips-list code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 10px;
+  color: #93c5fd;
 }
 </style>

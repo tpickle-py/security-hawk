@@ -216,3 +216,14 @@ class TestKioskMiddleware(SimpleTestCase):
         assert "entity_ids" in res.json()
         assert isinstance(res.json()["entity_ids"], list)
 
+    def test_kiosk_status(self) -> None:
+        res = self.client.get("/api/kiosk/status/")
+        assert res.status_code == 200
+        data = res.json()
+        assert "kiosk_enabled" in data
+        assert "kiosk_port" in data
+        assert "kiosk_token" in data
+        assert "active_viewers" in data
+        assert "total_viewers" in data["active_viewers"]
+
+

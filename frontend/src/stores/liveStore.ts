@@ -62,6 +62,19 @@ export const useLiveStore = defineStore("live", () => {
   let quietReturnTimer: number | null = null;
   const quietReturnSeconds = ref(120);
 
+  // Active Connected Screens / Viewers
+  const viewerCount = ref(1);
+  const totalViewers = ref(1);
+
+  function setViewerCount(count: number, total?: number) {
+    if (typeof count === "number" && count >= 0) {
+      viewerCount.value = Math.max(1, count);
+    }
+    if (typeof total === "number" && total >= 0) {
+      totalViewers.value = Math.max(1, total);
+    }
+  }
+
   function setConnected(connected: boolean) {
     isConnected.value = connected;
   }
@@ -275,7 +288,9 @@ export const useLiveStore = defineStore("live", () => {
     quietReturnSeconds,
     motionTrailsEnabled,
     activeTrail,
-    traversalWindowSeconds,
+    viewerCount,
+    totalViewers,
+    setViewerCount,
     setConnected,
     handleInitialStates,
     handleStateChange,

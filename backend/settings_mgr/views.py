@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 
+from django.conf import settings as django_settings
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from ha.client import HARestClient
 from ha.mqtt import LightweightMqttClient
+from live.consumers import connection_tracker
 from rules.storage import rules_storage
 from settings_mgr.storage import settings_storage
 
@@ -16,9 +18,16 @@ from settings_mgr.storage import settings_storage
 @csrf_exempt
 def get_or_update_settings(request: HttpRequest) -> JsonResponse:
     """GET /api/settings/ or POST /api/settings/"""
+    kiosk_info = {
+        "enabled": bool(getattr(django_settings, "KIOSK_ENABLED", False)),
+        "port": int(getattr(django_settings, "KIOSK_PORT", 8100)),
+        "token": str(getattr(django_settings, "KIOSK_TOKEN", "")),
+        "active_viewers": connection_tracker.get_stats(),
+    }
+
     if request.method == "GET":
         data = settings_storage.load()
-        return JsonResponse({"settings": data})
+        return JsonResponse({"settings": data, "kiosk": kiosk_info})
 
     if request.method == "POST":
         try:
@@ -27,7 +36,7 @@ def get_or_update_settings(request: HttpRequest) -> JsonResponse:
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
 
         saved = settings_storage.save(body)
-        return JsonResponse({"status": "ok", "settings": saved})
+        return JsonResponse({"status": "ok", "settings": saved, "kiosk": kiosk_info})
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
 

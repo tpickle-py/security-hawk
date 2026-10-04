@@ -48,8 +48,13 @@ export function useWebSocket(planIdGetter: () => string | null) {
         const msg = JSON.parse(event.data);
         if (msg.type === "initial_states") {
           liveStore.handleInitialStates(msg.states);
+          if (msg.viewer_count !== undefined) {
+            liveStore.setViewerCount(msg.viewer_count, msg.total_viewers);
+          }
         } else if (msg.type === "state_changed") {
           liveStore.handleStateChange(msg.entity_id, msg.new_state);
+        } else if (msg.type === "viewer_count") {
+          liveStore.setViewerCount(msg.count, msg.total);
         }
       } catch {
         // Ignore unparseable frames

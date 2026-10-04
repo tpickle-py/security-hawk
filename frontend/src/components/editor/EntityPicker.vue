@@ -15,6 +15,22 @@ const activeTab = ref<"all" | "unassigned" | "rules" | "ignored">("all");
 const selectedArea = ref("");
 const designatingEntityId = ref<string | null>(null);
 
+// Bulk hide state
+const showBulkHideModal = ref(false);
+const domainSearchQuery = ref("");
+const quickDomains = ["switch", "light", "automation", "scene", "script", "update", "sensor"];
+const nonSecurityPresetDomains = [
+  "switch",
+  "light",
+  "automation",
+  "scene",
+  "script",
+  "update",
+  "input_boolean",
+  "timer",
+  "counter",
+];
+
 // Rules state
 const rules = ref<CompositeRule[]>([]);
 const isLoadingRules = ref(false);
@@ -39,7 +55,6 @@ const placedEntityCounts = computed(() => {
 
 function handleSearch() {
   if (activeTab.value === "rules") {
-    // search filter handled in-memory for rules
     return;
   }
   entityStore.fetchEntities(
@@ -78,7 +93,7 @@ function switchTab(tab: "all" | "unassigned" | "rules" | "ignored") {
   if (tab === "rules") {
     fetchRules();
   } else if (tab === "ignored") {
-    // rendered from ignoredEntitiesList
+    // rendered from ignoredEntitiesList & ignoredDomains
   } else {
     handleSearch();
   }
@@ -103,6 +118,83 @@ const ignoredEntitiesList = computed(() => {
         e.friendly_name.toLowerCase().includes(q)
     );
 });
+
+function getDomainIcon(domain: string): string {
+  switch (domain) {
+    case "switch":
+      return "🔌";
+    case "light":
+      return "💡";
+    case "automation":
+      return "⚙️";
+    case "script":
+      return "📜";
+    case "scene":
+      return "🎬";
+    case "update":
+      return "🔄";
+    case "sensor":
+      return "🌡️";
+    case "binary_sensor":
+      return "🏃";
+    case "camera":
+      return "📹";
+    case "lock":
+      return "🔒";
+    case "siren":
+      return "🚨";
+    case "alarm_control_panel":
+      return "🛡️";
+    case "cover":
+      return "🪟";
+    case "climate":
+      return "❄️";
+    case "media_player":
+      return "🔊";
+    case "person":
+      return "👤";
+    case "device_tracker":
+      return "📍";
+    case "input_boolean":
+      return "🔘";
+    case "button":
+      return "🔘";
+    case "weather":
+      return "⛅";
+    default:
+      return "📦";
+  }
+}
+
+function isSecurityDomain(domain: string): boolean {
+  return ["camera", "binary_sensor", "lock", "alarm_control_panel", "siren"].includes(domain);
+}
+
+const filteredDetectedDomains = computed(() => {
+  const q = domainSearchQuery.value.toLowerCase().trim();
+  if (!q) return entityStore.detectedDomains;
+  return entityStore.detectedDomains.filter((d) => d.domain.toLowerCase().includes(q));
+});
+
+async function toggleDomainIgnore(domain: string) {
+  await entityStore.toggleIgnoreDomain(domain);
+  handleSearch();
+}
+
+async function hideNonSecurityPreset() {
+  await entityStore.ignoreMultipleDomains(nonSecurityPresetDomains);
+  handleSearch();
+}
+
+async function restoreAllDomains() {
+  await entityStore.unignoreAllDomains();
+  handleSearch();
+}
+
+async function restoreAllIgnored() {
+  await entityStore.unignoreAll();
+  handleSearch();
+}
 
 async function handleDesignateArea(entityId: string, e: Event) {
   const target = e.target as HTMLSelectElement;
@@ -170,6 +262,7 @@ const filteredRules = computed(() => {
 
 onMounted(async () => {
   await Promise.all([
+    entityStore.loadSettingsIgnored(),
     entityStore.fetchKnownEntityIds(),
     entityStore.fetchAreas(),
     entityStore.fetchEntities("", ""),
@@ -218,11 +311,14 @@ onMounted(async () => {
         class="tab-btn hidden-tab-btn"
         :class="{ active: activeTab === 'ignored' }"
         @click="switchTab('ignored')"
-        title="View hidden/ignored entities"
+        title="View hidden/ignored entities and domains"
       >
         <span>Hidden</span>
-        <span class="count-pill ignored-pill" v-if="entityStore.ignoredEntityIds.length > 0">
-          {{ entityStore.ignoredEntityIds.length }}
+        <span
+          class="count-pill ignored-pill"
+          v-if="(entityStore.ignoredEntityIds.length + entityStore.ignoredDomains.length) > 0"
+        >
+          {{ entityStore.ignoredEntityIds.length + entityStore.ignoredDomains.length }}
         </span>
       </button>
     </div>
@@ -251,6 +347,17 @@ onMounted(async () => {
           @click="selectDomain(d.value)"
         >
           {{ d.label }}
+        </button>
+        <button
+          class="filter-chip bulk-hide-chip"
+          :class="{ 'has-hidden': entityStore.ignoredDomains.length > 0 }"
+          @click="showBulkHideModal = true"
+          title="Bulk hide entire entity types (switch, light, automation, etc.)"
+        >
+          <span>🚫 Bulk Hide</span>
+          <span class="chip-badge" v-if="entityStore.ignoredDomains.length > 0">
+            {{ entityStore.ignoredDomains.length }}
+          </span>
         </button>
       </div>
 
@@ -334,42 +441,118 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- IGNORED / HIDDEN ENTITIES VIEW -->
-    <div v-else-if="activeTab === 'ignored'" class="entity-list">
-      <div v-if="ignoredEntitiesList.length === 0" class="list-state">
-        <p>No hidden entities.</p>
-        <span class="hint-text">Click the Hide button on any entity to hide it from Security Hawk.</span>
+    <!-- IGNORED / HIDDEN ENTITIES & DOMAINS VIEW -->
+    <div v-else-if="activeTab === 'ignored'" class="entity-list ignored-view-list">
+      <!-- Quick Domain Management Panel -->
+      <div class="bulk-hide-panel">
+        <div class="bulk-panel-header">
+          <span class="bulk-panel-title">🚫 Bulk Hide Types</span>
+          <button
+            class="btn-open-bulk-modal"
+            @click="showBulkHideModal = true"
+            title="Open Full Domain Filter Modal"
+          >
+            All Types ({{ entityStore.detectedDomains.length }})
+          </button>
+        </div>
+
+        <div class="bulk-quick-pills">
+          <button
+            v-for="d in quickDomains"
+            :key="d"
+            class="domain-toggle-pill"
+            :class="{ hidden: entityStore.isDomainIgnored(d) }"
+            @click="toggleDomainIgnore(d)"
+            :title="entityStore.isDomainIgnored(d) ? `Click to unhide all ${d} entities` : `Click to hide all ${d} entities`"
+          >
+            <span class="pill-icon">{{ getDomainIcon(d) }}</span>
+            <span class="pill-label">{{ d }}</span>
+            <span class="pill-status">{{ entityStore.isDomainIgnored(d) ? 'Hidden' : '+' }}</span>
+          </button>
+        </div>
+
+        <!-- Active Hidden Domains Tags -->
+        <div v-if="entityStore.ignoredDomains.length > 0" class="active-hidden-domains">
+          <div class="active-domains-header">
+            <span>Hidden Categories ({{ entityStore.ignoredDomains.length }}):</span>
+            <button class="btn-text-action" @click="restoreAllDomains">Restore All Types</button>
+          </div>
+          <div class="hidden-domain-tags">
+            <span
+              v-for="d in entityStore.ignoredDomains"
+              :key="d"
+              class="hidden-tag"
+            >
+              <span class="tag-icon">{{ getDomainIcon(d) }}</span>
+              <span class="tag-name">{{ d }}</span>
+              <button
+                class="tag-close-btn"
+                @click="toggleDomainIgnore(d)"
+                :title="`Unhide ${d}`"
+              >✕</button>
+            </span>
+          </div>
+        </div>
       </div>
-      <div
-        v-for="ent in ignoredEntitiesList"
-        :key="ent.entity_id"
-        class="entity-item ignored-item"
-      >
-        <div class="entity-icon-badge" :class="ent.type">
-          <span v-if="ent.type === 'motion'">🏃</span>
-          <span v-else-if="ent.type === 'door'">🚪</span>
-          <span v-else-if="ent.type === 'window'">🪟</span>
-          <span v-else-if="ent.type === 'camera'">📹</span>
-          <span v-else>📡</span>
+
+      <!-- Specific Hidden Devices Section -->
+      <div class="hidden-entities-section">
+        <div class="hidden-section-header">
+          <span class="hidden-title">
+            Specifically Hidden Devices
+            <span v-if="ignoredEntitiesList.length > 0">({{ ignoredEntitiesList.length }})</span>
+          </span>
+          <button
+            v-if="entityStore.ignoredEntityIds.length > 0"
+            class="btn-text-action danger"
+            @click="restoreAllIgnored"
+            title="Unhide all entities and categories"
+          >
+            Reset All
+          </button>
         </div>
-        <div class="entity-details">
-          <div class="entity-name" :title="ent.friendly_name">
-            {{ ent.friendly_name }}
-          </div>
-          <div class="entity-sub">
-            <span class="entity-id" :title="ent.entity_id">{{ ent.entity_id }}</span>
-          </div>
-          <div v-if="ent.area_name" class="area-designation-row">
-            <span class="area-tag">📍 {{ ent.area_name }}</span>
-          </div>
+
+        <div v-if="ignoredEntitiesList.length === 0" class="list-state empty-hidden">
+          <p v-if="entityStore.ignoredDomains.length === 0">No hidden devices or categories.</p>
+          <span class="hint-text" v-if="entityStore.ignoredDomains.length === 0">
+            Click the "Hide" button on any device or use Bulk Hide above to keep your floor plan uncluttered.
+          </span>
+          <span class="hint-text" v-else>
+            No individual devices hidden. {{ entityStore.ignoredDomains.length }} category(ies) are currently bulk-hidden.
+          </span>
         </div>
-        <button
-          class="btn-unhide-entity"
-          title="Unhide / Restore this entity to Security Hawk"
-          @click.stop="entityStore.unignoreEntity(ent.entity_id)"
+
+        <div
+          v-for="ent in ignoredEntitiesList"
+          :key="ent.entity_id"
+          class="entity-item ignored-item"
         >
-          👁️ Restore
-        </button>
+          <div class="entity-icon-badge" :class="ent.type">
+            <span v-if="ent.type === 'motion'">🏃</span>
+            <span v-else-if="ent.type === 'door'">🚪</span>
+            <span v-else-if="ent.type === 'window'">🪟</span>
+            <span v-else-if="ent.type === 'camera'">📹</span>
+            <span v-else>📡</span>
+          </div>
+          <div class="entity-details">
+            <div class="entity-name" :title="ent.friendly_name">
+              {{ ent.friendly_name }}
+            </div>
+            <div class="entity-sub">
+              <span class="entity-id" :title="ent.entity_id">{{ ent.entity_id }}</span>
+            </div>
+            <div v-if="ent.area_name" class="area-designation-row">
+              <span class="area-tag">📍 {{ ent.area_name }}</span>
+            </div>
+          </div>
+          <button
+            class="btn-unhide-entity"
+            title="Unhide / Restore this entity to Security Hawk"
+            @click.stop="entityStore.unignoreEntity(ent.entity_id)"
+          >
+            👁️ Restore
+          </button>
+        </div>
       </div>
     </div>
 
@@ -474,6 +657,93 @@ onMounted(async () => {
       @close="showRuleBuilder = false"
       @saved="fetchRules"
     />
+
+    <!-- Bulk Hide Domain Modal -->
+    <div
+      v-if="showBulkHideModal"
+      class="bulk-modal-backdrop"
+      @click.self="showBulkHideModal = false"
+    >
+      <div class="bulk-modal-card glass-panel">
+        <div class="bulk-modal-header">
+          <div>
+            <h3 class="bulk-modal-title">🚫 Bulk Hide Entity Types</h3>
+            <p class="bulk-modal-subtitle">
+              Hide entire categories of Home Assistant entities (e.g. switches, lights, automations) so only relevant security devices appear in your picker.
+            </p>
+          </div>
+          <button class="bulk-modal-close" @click="showBulkHideModal = false" aria-label="Close">✕</button>
+        </div>
+
+        <!-- Quick Presets -->
+        <div class="preset-action-bar">
+          <button
+            class="preset-btn primary"
+            @click="hideNonSecurityPreset"
+            title="Hide switches, lights, automations, scenes, scripts, updates, helpers"
+          >
+            🛡️ Hide Non-Security Types
+          </button>
+          <button
+            class="preset-btn secondary"
+            @click="restoreAllDomains"
+            :disabled="entityStore.ignoredDomains.length === 0"
+          >
+            Show All Types
+          </button>
+        </div>
+
+        <!-- Search Domains Filter -->
+        <div class="bulk-search-box">
+          <input
+            type="text"
+            v-model="domainSearchQuery"
+            placeholder="Filter entity types (e.g. switch, light, sensor)..."
+            class="bulk-search-input"
+          />
+        </div>
+
+        <!-- Domain List -->
+        <div class="domain-checklist">
+          <div
+            v-for="item in filteredDetectedDomains"
+            :key="item.domain"
+            class="domain-check-item"
+            :class="{ 'is-ignored': entityStore.isDomainIgnored(item.domain) }"
+            @click="toggleDomainIgnore(item.domain)"
+          >
+            <div class="domain-info-left">
+              <input
+                type="checkbox"
+                :checked="entityStore.isDomainIgnored(item.domain)"
+                @click.stop="toggleDomainIgnore(item.domain)"
+                class="domain-checkbox"
+              />
+              <span class="domain-icon">{{ getDomainIcon(item.domain) }}</span>
+              <div class="domain-label-group">
+                <span class="domain-name">{{ item.domain }}</span>
+                <span v-if="isSecurityDomain(item.domain)" class="sec-badge">Security Device</span>
+              </div>
+            </div>
+            <div class="domain-count-badge">
+              {{ item.count }} entities
+            </div>
+          </div>
+          <div v-if="filteredDetectedDomains.length === 0" class="empty-domains-msg">
+            No entity domains found matching "{{ domainSearchQuery }}".
+          </div>
+        </div>
+
+        <div class="bulk-modal-footer">
+          <div class="hidden-summary-text">
+            <strong>{{ entityStore.ignoredDomains.length }}</strong> category(ies) currently hidden
+          </div>
+          <button class="bulk-done-btn" @click="showBulkHideModal = false">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   </aside>
 </template>
 
@@ -900,5 +1170,495 @@ onMounted(async () => {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 6px;
+}
+
+/* Bulk Hide Filter Chip in Domain Row */
+.bulk-hide-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+.bulk-hide-chip:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+.bulk-hide-chip.has-hidden {
+  background: rgba(239, 68, 68, 0.22) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.chip-badge {
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Bulk Hide Panel inside Ignored Tab */
+.ignored-view-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bulk-hide-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bulk-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bulk-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.btn-open-bulk-modal {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-open-bulk-modal:hover {
+  background: rgba(99, 102, 241, 0.3);
+  color: #ffffff;
+}
+
+.bulk-quick-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.domain-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.domain-toggle-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.domain-toggle-pill.hidden {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.pill-icon {
+  font-size: 11px;
+}
+
+.pill-label {
+  font-family: var(--font-mono, monospace);
+}
+
+.pill-status {
+  font-size: 9px;
+  opacity: 0.8;
+  padding-left: 2px;
+}
+
+.active-hidden-domains {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.active-domains-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.hidden-domain-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.hidden-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: var(--radius-sm);
+  padding: 2px 5px;
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.tag-close-btn {
+  background: transparent;
+  border: none;
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0 1px;
+  line-height: 1;
+}
+
+.tag-close-btn:hover {
+  color: #ffffff;
+}
+
+.btn-text-action {
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  color: #a5b4fc;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.btn-text-action:hover {
+  color: #ffffff;
+}
+
+.btn-text-action.danger {
+  color: #fca5a5;
+}
+
+.btn-text-action.danger:hover {
+  color: #ef4444;
+}
+
+.hidden-entities-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hidden-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.hidden-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.empty-hidden {
+  padding: 16px 8px;
+}
+
+/* Bulk Hide Modal Overlay */
+.bulk-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.bulk-modal-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  animation: fadeInModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInModal {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.bulk-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bulk-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  margin: 0;
+}
+
+.bulk-modal-subtitle {
+  font-size: 12px;
+  color: var(--text-muted, #94a3b8);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.bulk-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
+.bulk-modal-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.preset-action-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 8px;
+}
+
+.preset-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.preset-btn.primary {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+
+.preset-btn.primary:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.preset-btn.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.preset-btn.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.preset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bulk-search-box {
+  padding: 4px 20px 10px;
+}
+
+.bulk-search-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 12px;
+  color: #ffffff;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.bulk-search-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.domain-checklist {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 380px;
+}
+
+.domain-check-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.domain-check-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.domain-check-item.is-ignored {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.domain-info-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.domain-checkbox {
+  cursor: pointer;
+  accent-color: #ef4444;
+  width: 15px;
+  height: 15px;
+}
+
+.domain-icon {
+  font-size: 15px;
+}
+
+.domain-label-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.domain-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.sec-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.domain-count-badge {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-domains-msg {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+}
+
+.bulk-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.hidden-summary-text {
+  font-size: 12px;
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.hidden-summary-text strong {
+  color: #ef4444;
+}
+
+.bulk-done-btn {
+  background: var(--color-primary, #6366f1);
+  border: none;
+  color: #ffffff;
+  padding: 7px 18px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bulk-done-btn:hover {
+  background: #4f46e5;
 }
 </style>
