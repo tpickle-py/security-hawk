@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.9] - 2026-10-04
 
-### Changed
-Add camera POV and depth controls in editor, quick entity hide/ignore in picker, window and door sensor detection, and fix entity not found issue
+### Added
+- **Camera Point of View & Depth of View in Editor**: Render live Field of View (FOV) cones directly on the canvas in Design mode, featuring a dashed aiming ray and directional arrowhead indicating aim and rotation angle. Increased depth slider range up to 500px in the properties panel.
+- **Entity Hide / Ignore in Entity Picker**: Added a one-click "Hide" button on entity cards so irrelevant entities (diagnostics, non-security smart devices) can be hidden. Added a dedicated "Hidden" tab with count badge to review and unhide entities, with state persisted across sessions.
+- **Window vs. Door Sensor Detection**: Added distinct entity classification and icons for windows (🪟) vs. doors (🚪) with support for contact sensors (e.g. Sonoff SNZB-04, Aqara). Added category filter chips (`All`, `Cameras`, `Motion`, `Doors`, `Windows`) to the entity picker.
+- **Editable Entity ID**: Allowed direct editing of the Entity ID field in the Property Panel so typos and renamed entities can be fixed without deleting and recreating endpoints.
+
+### Fixed
+- **False "Entity Not Found in HA" Warning**: Added `/api/entities/ids/` endpoint to load all registered Home Assistant entity IDs into the frontend store and cross-reference active WebSocket states, preventing valid placed entities outside the initial search window from being falsely flagged as missing.
 
 ## [0.3.8] - 2026-10-04
 
