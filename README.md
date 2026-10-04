@@ -2,8 +2,9 @@
 
 <div align="center">
 
-![Tests](https://img.shields.io/badge/tests-23%20passed-success?style=for-the-badge&logo=pytest&logoColor=white)
-![Coverage](https://img.shields.io/badge/coverage-pytest--cov%2060%25-informational?style=for-the-badge&logo=codecov&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-58%20passed-success?style=for-the-badge&logo=pytest&logoColor=white)
+![Coverage](https://img.shields.io/badge/coverage-pytest--cov%2073%25-informational?style=for-the-badge&logo=codecov&logoColor=white)
+![Version](https://img.shields.io/badge/version-v0.3.4-blue?style=for-the-badge&logo=semver&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue?style=for-the-badge&logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/django-5.2%2B-092E20?style=for-the-badge&logo=django&logoColor=white)
 ![Vue.js](https://img.shields.io/badge/vue.js-3.5%2B-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white)
@@ -197,16 +198,46 @@
 
 4. **Run Tests & Linting:**
    ```bash
-   # Run tests with coverage
-   uv run pytest tests --cov=backend
+   # Run tests with coverage (auto-configured in pyproject.toml)
+   uv run pytest
 
    # Run linter checks
    uv run ruff check .
    ```
 
-5. **Docker Build & Trivy Security Scan:**
+5. **Version Bumping (Semantic Versioning):**
    ```bash
-   # Build the container image
+   # Bump patch version (e.g. 0.3.4 -> 0.3.5)
+   python3 scripts/bump_version.py patch -m "Fix description"
+
+   # Bump minor version (e.g. 0.3.4 -> 0.4.0)
+   python3 scripts/bump_version.py minor
+
+   # Set explicit version
+   python3 scripts/bump_version.py 0.4.0
+
+   # Dry run without touching files
+   python3 scripts/bump_version.py patch --dry-run
+   ```
+   *The bump script utilizes `uv version` to update `pyproject.toml` and `uv.lock`, then synchronizes `config.yaml`, `security_hawk/config.yaml`, `frontend/package.json`, `Dockerfile`, `CHANGELOG.md`, and `../ha-addons/security_hawk/config.yaml`.*
+
+6. **Release & Home Assistant Distribution:**
+   - Commit and push to `master`:
+     ```bash
+     git add -A
+     git commit -m "chore(release): v0.3.5"
+     git tag v0.3.5
+     git push origin master && git push origin v0.3.5
+     ```
+   - Publish a new Release on GitHub matching the tag (`v0.3.5`).
+   - GitHub Actions (`.github/workflows/deploy.yaml`) automatically:
+     1. Builds multi-architecture container images (`linux/amd64`, `linux/arm64`) using Docker Buildx.
+     2. Pushes images to GitHub Packages (`ghcr.io/tpickle-py/security-hawk/{arch}:0.3.5`).
+     3. Triggers cross-repository dispatch to [ha-addons](https://github.com/tpickle-py/ha-addons) to update the add-on store catalog.
+
+7. **Docker Build & Trivy Security Scan:**
+   ```bash
+   # Build the container image locally
    docker build -t security-hawk:latest .
 
    # Scan container image for vulnerabilities with Trivy
