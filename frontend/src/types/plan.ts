@@ -251,6 +251,15 @@ export interface NotificationSettings {
   whatsapp?: WhatsAppSettings;
 }
 
+export type DockCorner = "bottom-left" | "bottom-right" | "top-left" | "top-right";
+export type ToolbarDockPosition = "top" | "bottom" | "left" | "right";
+
+export interface DockPositions {
+  activity_feed: DockCorner;
+  nav_controls: DockCorner;
+  toolbar?: ToolbarDockPosition;
+}
+
 export interface AppSettings {
   quiet_return_seconds: number;
   auto_dismiss_camera_seconds: number;
@@ -263,6 +272,7 @@ export interface AppSettings {
   notifications?: NotificationSettings;
   ignored_entities?: string[];
   ignored_domains?: string[];
+  dock_positions?: DockPositions;
 }
 
 export interface KioskStatus {

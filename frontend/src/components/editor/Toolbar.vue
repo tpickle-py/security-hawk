@@ -205,7 +205,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="toolbar glass-panel">
+  <div :class="['toolbar', 'glass-panel', `dock-${editorStore.toolbarDock}`]">
     <!-- Tool selection -->
     <div class="tool-group">
       <button
@@ -460,6 +460,19 @@ onUnmounted(() => {
       />
     </div>
 
+    <div class="divider"></div>
+
+    <!-- Quick Dock Position Button -->
+    <div class="tool-group">
+      <button
+        class="tool-btn dock-toggle-btn"
+        :title="`Toolbar docked: ${editorStore.toolbarDock.toUpperCase()}. Click to cycle position (Top, Right, Bottom, Left)`"
+        @click="editorStore.cycleToolbarDock()"
+      >
+        <span>⚓</span>
+      </button>
+    </div>
+
     <!-- Save status -->
     <div class="save-status">
       <span v-if="planStore.isSaving" class="status-saving">Saving...</span>
@@ -491,14 +504,78 @@ onUnmounted(() => {
 <style scoped>
 .toolbar {
   position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
   z-index: 100;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Docking Positions */
+.toolbar.dock-top {
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: row;
+}
+
+.toolbar.dock-bottom {
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: row;
+}
+
+.toolbar.dock-left {
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  padding: 10px 6px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.toolbar.dock-right {
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  padding: 10px 6px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+/* Vertical Dock Adjustments */
+.toolbar.dock-left .tool-group,
+.toolbar.dock-right .tool-group {
+  flex-direction: column;
+  gap: 5px;
+}
+
+.toolbar.dock-left .divider,
+.toolbar.dock-right .divider {
+  width: 20px;
+  height: 1px;
+  margin: 4px 0;
+}
+
+.toolbar.dock-left .tool-btn.action span:not(.vp-icon),
+.toolbar.dock-right .tool-btn.action span:not(.vp-icon),
+.toolbar.dock-left .save-status,
+.toolbar.dock-right .save-status {
+  display: none;
+}
+
+.dock-toggle-btn {
+  font-size: 13px;
+  padding: 6px 8px;
+  color: var(--text-secondary);
+}
+
+.dock-toggle-btn:hover {
+  color: #a5b4fc;
 }
 
 .tool-group {

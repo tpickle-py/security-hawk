@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { ScalePoint } from "@/types/plan";
+import type { ScalePoint, ToolbarDockPosition } from "@/types/plan";
 
 export type EditorTool =
   | "select"
@@ -100,6 +100,36 @@ export const useEditorStore = defineStore("editor", () => {
   // Viewport simulator
   const activeViewport = ref<ViewportPreset>("freeform");
   const showViewportGuides = ref(true);
+
+  // Toolbar Dock Position (top, bottom, left, right)
+  const toolbarDock = ref<ToolbarDockPosition>(getInitialToolbarDock());
+
+  function getInitialToolbarDock(): ToolbarDockPosition {
+    try {
+      const saved = localStorage.getItem("sh_toolbar_dock");
+      if (saved && ["top", "bottom", "left", "right"].includes(saved)) {
+        return saved as ToolbarDockPosition;
+      }
+    } catch {}
+    return "top";
+  }
+
+  function setToolbarDock(dock: ToolbarDockPosition) {
+    toolbarDock.value = dock;
+    try {
+      localStorage.setItem("sh_toolbar_dock", dock);
+    } catch {}
+  }
+
+  function cycleToolbarDock() {
+    const docks: ToolbarDockPosition[] = ["top", "right", "bottom", "left"];
+    const idx = docks.indexOf(toolbarDock.value);
+    setToolbarDock(docks[(idx + 1) % docks.length]);
+  }
+
+  function resetToolbarDock() {
+    setToolbarDock("top");
+  }
 
   // Backward compatibility single-select getter
   const selectedEndpointId = computed(() => selectedEndpointIds.value[0] || null);
@@ -288,5 +318,9 @@ export const useEditorStore = defineStore("editor", () => {
     startScaleCalibration,
     addScalePoint,
     cancelScaleCalibration,
+    toolbarDock,
+    setToolbarDock,
+    cycleToolbarDock,
+    resetToolbarDock,
   };
 });

@@ -1,6 +1,11 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { EntityState } from "@/types/plan";
+import type { EntityState, DockPositions, DockCorner } from "@/types/plan";
+
+export const DEFAULT_DOCK_POSITIONS: DockPositions = {
+  activity_feed: "bottom-left",
+  nav_controls: "bottom-right",
+};
 
 export interface LiveEvent {
   id: string;
@@ -65,6 +70,60 @@ export const useLiveStore = defineStore("live", () => {
   // Active Connected Screens / Viewers
   const viewerCount = ref(1);
   const totalViewers = ref(1);
+
+  // Docked Menus & Overlays Layout Positions
+  const dockPositions = ref<DockPositions>(getInitialDockPositions());
+
+  function getInitialDockPositions(): DockPositions {
+    try {
+      const saved = localStorage.getItem("sh_dock_positions");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          activity_feed: parsed.activity_feed || "bottom-left",
+          nav_controls: parsed.nav_controls || "bottom-right",
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return { ...DEFAULT_DOCK_POSITIONS };
+  }
+
+  function setDockPosition(menu: "activity_feed" | "nav_controls", corner: DockCorner) {
+    dockPositions.value = {
+      ...dockPositions.value,
+      [menu]: corner,
+    };
+    try {
+      localStorage.setItem("sh_dock_positions", JSON.stringify(dockPositions.value));
+    } catch {}
+  }
+
+  function cycleDockPosition(menu: "activity_feed" | "nav_controls") {
+    const corners: DockCorner[] = ["bottom-left", "bottom-right", "top-right", "top-left"];
+    const current = dockPositions.value[menu];
+    const nextIdx = (corners.indexOf(current) + 1) % corners.length;
+    setDockPosition(menu, corners[nextIdx]);
+  }
+
+  function resetDockPositions() {
+    dockPositions.value = { ...DEFAULT_DOCK_POSITIONS };
+    try {
+      localStorage.setItem("sh_dock_positions", JSON.stringify(DEFAULT_DOCK_POSITIONS));
+    } catch {}
+  }
+
+  function setDockPositionsFromSettings(positions?: DockPositions | null) {
+    if (!positions) return;
+    dockPositions.value = {
+      activity_feed: positions.activity_feed || "bottom-left",
+      nav_controls: positions.nav_controls || "bottom-right",
+    };
+    try {
+      localStorage.setItem("sh_dock_positions", JSON.stringify(dockPositions.value));
+    } catch {}
+  }
 
   function setViewerCount(count: number, total?: number) {
     if (typeof count === "number" && count >= 0) {
@@ -290,6 +349,11 @@ export const useLiveStore = defineStore("live", () => {
     activeTrail,
     viewerCount,
     totalViewers,
+    dockPositions,
+    setDockPosition,
+    cycleDockPosition,
+    resetDockPositions,
+    setDockPositionsFromSettings,
     setViewerCount,
     setConnected,
     handleInitialStates,

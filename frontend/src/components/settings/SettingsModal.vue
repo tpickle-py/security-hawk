@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { AppSettings, KioskStatus } from "@/types/plan";
+import type { AppSettings, KioskStatus, DockCorner, ToolbarDockPosition } from "@/types/plan";
 import { api, getBasePath } from "@/services/api";
-import { useLiveStore } from "@/stores/liveStore";
+import { useLiveStore, DEFAULT_DOCK_POSITIONS } from "@/stores/liveStore";
+import { useEditorStore } from "@/stores/editorStore";
 
 const props = defineProps<{
   show: boolean;
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>();
 
 const liveStore = useLiveStore();
+const editorStore = useEditorStore();
 
 const activeTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications" | "kiosk">(
   props.initialTab || "behaviors"
@@ -24,6 +26,35 @@ const activeTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications" | "kios
 const quietReturnSeconds = ref(120);
 const autoDismissCameraSeconds = ref(30);
 const defaultView = ref<"overview" | "floor">("overview");
+
+// Docked Menus Layout
+const activityFeedDock = ref<DockCorner>("bottom-left");
+const navControlsDock = ref<DockCorner>("bottom-right");
+const toolbarDock = ref<ToolbarDockPosition>("top");
+
+const cornerOptions: Array<{ label: string; value: DockCorner; desc: string }> = [
+  { label: "Bottom Left", value: "bottom-left", desc: "Lower left corner" },
+  { label: "Bottom Right", value: "bottom-right", desc: "Lower right corner" },
+  { label: "Top Left", value: "top-left", desc: "Upper left below topbar" },
+  { label: "Top Right", value: "top-right", desc: "Upper right below topbar" },
+];
+
+const toolbarDockOptions: Array<{ label: string; value: ToolbarDockPosition }> = [
+  { label: "Top Center (Default)", value: "top" },
+  { label: "Bottom Center", value: "bottom" },
+  { label: "Left Side", value: "left" },
+  { label: "Right Side", value: "right" },
+];
+
+const isDockOverlapping = computed(() => activityFeedDock.value === navControlsDock.value);
+
+function handleResetDockPositions() {
+  activityFeedDock.value = DEFAULT_DOCK_POSITIONS.activity_feed;
+  navControlsDock.value = DEFAULT_DOCK_POSITIONS.nav_controls;
+  toolbarDock.value = "top";
+  liveStore.resetDockPositions();
+  editorStore.resetToolbarDock();
+}
 
 // MQTT
 const mqttEnabled = ref(false);
@@ -181,6 +212,18 @@ watch(
         waApiKey.value = wa.api_key || "";
         waAccountSid.value = wa.account_sid || "";
         waFromPhone.value = wa.from_phone || "";
+
+        if (s.dock_positions) {
+          activityFeedDock.value = s.dock_positions.activity_feed || "bottom-left";
+          navControlsDock.value = s.dock_positions.nav_controls || "bottom-right";
+          toolbarDock.value = s.dock_positions.toolbar || "top";
+          liveStore.setDockPositionsFromSettings(s.dock_positions);
+          editorStore.setToolbarDock(toolbarDock.value);
+        } else {
+          activityFeedDock.value = liveStore.dockPositions.activity_feed;
+          navControlsDock.value = liveStore.dockPositions.nav_controls;
+          toolbarDock.value = editorStore.toolbarDock;
+        }
       } catch (err: any) {
         errorMessage.value = err.message || "Failed to load settings.";
       } finally {
@@ -201,6 +244,11 @@ async function handleSave() {
       quiet_return_seconds: Number(quietReturnSeconds.value),
       auto_dismiss_camera_seconds: Number(autoDismissCameraSeconds.value),
       default_view: defaultView.value,
+      dock_positions: {
+        activity_feed: activityFeedDock.value,
+        nav_controls: navControlsDock.value,
+        toolbar: toolbarDock.value,
+      },
       mqtt: {
         enabled: mqttEnabled.value,
         host: mqttHost.value.trim(),
@@ -235,6 +283,9 @@ async function handleSave() {
     };
 
     const res = await api.saveSettings(payload);
+    liveStore.setDockPosition("activity_feed", activityFeedDock.value);
+    liveStore.setDockPosition("nav_controls", navControlsDock.value);
+    editorStore.setToolbarDock(toolbarDock.value);
     successMessage.value = "Settings saved successfully.";
     emit("saved", res.settings);
     setTimeout(() => {
@@ -395,6 +446,102 @@ async function handleSyncHelpers() {
                   >
                     Primary Floor Plan
                   </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- DOCKED MENUS & OVERLAY LAYOUT -->
+            <div class="form-section">
+              <div class="section-title-row">
+                <div class="section-title">Docked Menus & Overlays Layout</div>
+                <button
+                  type="button"
+                  class="reset-dock-btn"
+                  @click="handleResetDockPositions"
+                  title="Reset all docked menus to clean default corners"
+                >
+                  ↺ Reset Docked Positions
+                </button>
+              </div>
+              <p class="section-desc">
+                Choose which screen corners the Live Activity Feed and Navigation Controls dock to, preventing menu overlaps on desktop, tablets, and wall kiosks.
+              </p>
+
+              <div v-if="isDockOverlapping" class="alert-box warning">
+                ⚠️ Both the Activity Feed and Navigation Controls are assigned to the <strong>{{ activityFeedDock }}</strong> corner. They may overlap. Consider placing them in separate corners (e.g. Activity Feed in Bottom Left, Controls in Bottom Right).
+              </div>
+
+              <div class="dock-options-grid">
+                <!-- Activity Feed Card -->
+                <div class="dock-config-card">
+                  <div class="dock-card-header">
+                    <span class="dock-card-icon">📋</span>
+                    <div>
+                      <div class="dock-card-title">Live Activity Feed</div>
+                      <div class="dock-card-desc">Real-time sensor state events & alert drawer</div>
+                    </div>
+                  </div>
+                  <div class="corner-picker">
+                    <button
+                      v-for="corner in cornerOptions"
+                      :key="corner.value"
+                      type="button"
+                      class="corner-btn"
+                      :class="{ active: activityFeedDock === corner.value }"
+                      @click="activityFeedDock = corner.value"
+                    >
+                      <span class="corner-dot" :class="corner.value"></span>
+                      {{ corner.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Navigation Controls HUD Card -->
+                <div class="dock-config-card">
+                  <div class="dock-card-header">
+                    <span class="dock-card-icon">🎮</span>
+                    <div>
+                      <div class="dock-card-title">TV & Navigation Controls HUD</div>
+                      <div class="dock-card-desc">D-pad, zoom, center/fit, and position lock cluster</div>
+                    </div>
+                  </div>
+                  <div class="corner-picker">
+                    <button
+                      v-for="corner in cornerOptions"
+                      :key="corner.value"
+                      type="button"
+                      class="corner-btn"
+                      :class="{ active: navControlsDock === corner.value }"
+                      @click="navControlsDock = corner.value"
+                    >
+                      <span class="corner-dot" :class="corner.value"></span>
+                      {{ corner.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Editor Toolbar Docking Card -->
+                <div class="dock-config-card" style="grid-column: 1 / -1;">
+                  <div class="dock-card-header">
+                    <span class="dock-card-icon">🛠️</span>
+                    <div>
+                      <div class="dock-card-title">Editor Drawing Toolbar</div>
+                      <div class="dock-card-desc">Design mode toolbars (tools, drawing tools, undo, viewport simulators)</div>
+                    </div>
+                  </div>
+                  <div class="corner-picker" style="grid-template-columns: repeat(4, 1fr);">
+                    <button
+                      v-for="tb in toolbarDockOptions"
+                      :key="tb.value"
+                      type="button"
+                      class="corner-btn"
+                      :class="{ active: toolbarDock === tb.value }"
+                      @click="toolbarDock = tb.value"
+                    >
+                      <span class="corner-dot" :class="tb.value"></span>
+                      {{ tb.label }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1504,5 +1651,123 @@ async function handleSyncHelpers() {
   font-family: monospace;
   font-size: 10px;
   color: #93c5fd;
+}
+
+/* Docked Menus & Overlay Layout Styles */
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.reset-dock-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5b4fc;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.reset-dock-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
+.dock-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .dock-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dock-config-card {
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dock-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.dock-card-icon {
+  font-size: 20px;
+}
+
+.dock-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dock-card-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.corner-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.corner-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm, 6px);
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.corner-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.corner-btn.active {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.corner-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #64748b;
+  display: inline-block;
+}
+
+.corner-btn.active .corner-dot {
+  background: #6366f1;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.8);
 }
 </style>

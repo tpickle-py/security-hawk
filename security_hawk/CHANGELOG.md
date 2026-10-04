@@ -5,6 +5,14 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.12] - 2026-10-04
+
+### Added
+- **Dockable Live Activity Feed & Navigation HUD**: Separated the Live Activity Feed (now defaulting to Bottom Left) and the TV & Touch Navigation Controls HUD (Bottom Right) to eliminate bottom-right menu collisions. Added on-screen quick dock buttons (⚓) to cycle either overlay through all four screen corners (`bottom-left`, `bottom-right`, `top-right`, `top-left`) on the fly.
+- **Dockable Editor Toolbar**: Added support for docking the main Design mode drawing toolbar across four distinct orientations (`top` horizontal center, `bottom` horizontal center, `left` vertical sidebar, and `right` vertical sidebar) with smooth animation transitions and an on-toolbar quick dock cycler button.
+- **Docked Menus & Overlays Layout in Settings**: Added a new configuration card under *Settings &rarr; Behaviors* allowing users to assign dock corners for the Activity Feed, Navigation HUD, and Toolbar. Includes an automatic collision warning badge when menus share the same corner.
+- **Reset Docked Positions**: Added a one-click "↺ Reset Docked Positions" button in Settings that instantly restores all menus and toolbars to their clean, non-overlapping default positions.
+
 ## [0.3.11] - 2026-10-04
 
 ### Added

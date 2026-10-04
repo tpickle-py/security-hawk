@@ -22,6 +22,27 @@ const filteredEvents = computed(() => {
   );
 });
 
+const dockCorner = computed(() => liveStore.dockPositions?.activity_feed || "bottom-left");
+
+const dockCornerLabel = computed(() => {
+  switch (dockCorner.value) {
+    case "bottom-left":
+      return "Bottom Left";
+    case "bottom-right":
+      return "Bottom Right";
+    case "top-left":
+      return "Top Left";
+    case "top-right":
+      return "Top Right";
+    default:
+      return dockCorner.value;
+  }
+});
+
+function cycleDock() {
+  liveStore.cycleDockPosition("activity_feed");
+}
+
 function toggleOpen() {
   isOpen.value = !isOpen.value;
 }
@@ -80,7 +101,7 @@ function handleEventClick(event: LiveEvent) {
 </script>
 
 <template>
-  <div class="event-feed-drawer" :class="{ open: isOpen }">
+  <div class="event-feed-drawer" :class="[`dock-${dockCorner}`, { open: isOpen }]">
     <!-- Header / Toggle Tab -->
     <div class="drawer-header" @click="toggleOpen">
       <div class="header-left">
@@ -90,11 +111,21 @@ function handleEventClick(event: LiveEvent) {
         <span class="drawer-title">Live Activity Feed</span>
         <span class="event-count">{{ liveStore.eventFeed.length }}</span>
       </div>
-      <button class="toggle-btn" :title="isOpen ? 'Collapse Feed' : 'Expand Feed'">
-        <svg viewBox="0 0 24 24" width="14" height="14" :transform="isOpen ? 'rotate(180)' : undefined">
-          <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
-        </svg>
-      </button>
+      <div class="header-actions">
+        <button
+          class="dock-btn"
+          type="button"
+          :title="`Docked: ${dockCornerLabel}. Click to cycle corner position`"
+          @click.stop="cycleDock"
+        >
+          <span class="dock-icon">⚓</span>
+        </button>
+        <button class="toggle-btn" :title="isOpen ? 'Collapse Feed' : 'Expand Feed'">
+          <svg viewBox="0 0 24 24" width="14" height="14" :transform="isOpen ? 'rotate(180)' : undefined">
+            <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Drawer Content -->
@@ -152,8 +183,6 @@ function handleEventClick(event: LiveEvent) {
 <style scoped>
 .event-feed-drawer {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
   width: 320px;
   background: var(--bg-surface-glass);
   backdrop-filter: blur(12px);
@@ -164,8 +193,29 @@ function handleEventClick(event: LiveEvent) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: max-height 0.25s ease-in-out;
+  transition: max-height 0.25s ease-in-out, top 0.2s ease, bottom 0.2s ease, left 0.2s ease, right 0.2s ease;
   max-height: 42px;
+}
+
+/* Corner Docking */
+.event-feed-drawer.dock-bottom-left {
+  bottom: 16px;
+  left: 16px;
+}
+
+.event-feed-drawer.dock-bottom-right {
+  bottom: 16px;
+  right: 16px;
+}
+
+.event-feed-drawer.dock-top-left {
+  top: 72px;
+  left: 16px;
+}
+
+.event-feed-drawer.dock-top-right {
+  top: 72px;
+  right: 16px;
 }
 
 .event-feed-drawer.open {
@@ -206,6 +256,32 @@ function handleEventClick(event: LiveEvent) {
   background: rgba(99, 102, 241, 0.25);
   color: #a5b4fc;
   border-radius: var(--radius-full);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm, 4px);
+  padding: 3px 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.dock-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #ffffff;
 }
 
 .toggle-btn {

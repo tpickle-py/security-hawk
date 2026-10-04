@@ -111,7 +111,8 @@ onUnmounted(() => {
 .kiosk-status-pill {
   position: absolute;
   bottom: 24px;
-  left: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -120,6 +121,7 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 110;
 }
 
 .hawk-badge {

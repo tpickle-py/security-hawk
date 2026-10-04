@@ -48,6 +48,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "ignored_entities": [],
     "ignored_domains": [],
+    "dock_positions": {
+        "activity_feed": "bottom-left",
+        "nav_controls": "bottom-right",
+        "toolbar": "top",
+    },
 }
 
 

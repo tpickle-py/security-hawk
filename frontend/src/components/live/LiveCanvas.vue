@@ -25,6 +25,27 @@ const isPositionLocked = ref(localStorage.getItem("sh_live_locked") === "true");
 const showNavControls = ref(true);
 const isFullscreen = ref(Boolean(document.fullscreenElement));
 
+const navDockCorner = computed(() => liveStore.dockPositions?.nav_controls || "bottom-right");
+
+const navDockCornerLabel = computed(() => {
+  switch (navDockCorner.value) {
+    case "bottom-left":
+      return "Bottom Left";
+    case "bottom-right":
+      return "Bottom Right";
+    case "top-left":
+      return "Top Left";
+    case "top-right":
+      return "Top Right";
+    default:
+      return navDockCorner.value;
+  }
+});
+
+function cycleNavDock() {
+  liveStore.cycleDockPosition("nav_controls");
+}
+
 // Live Drag & Touch state
 const isLiveDragging = ref(false);
 const liveDragStart = ref({ x: 0, y: 0 });
@@ -636,15 +657,24 @@ onUnmounted(() => {
     />
 
     <!-- TV & Phone Navigation Controls HUD -->
-    <div class="live-nav-hud" :class="{ collapsed: !showNavControls }">
-      <button
-        class="nav-toggle-btn glass-panel"
-        @click="showNavControls = !showNavControls"
-        :title="showNavControls ? 'Hide Page Controls' : 'Show TV & Phone Navigation Controls'"
-      >
-        <span class="hud-toggle-icon">{{ showNavControls ? '▼' : '🎮' }}</span>
-        <span class="hud-toggle-label">{{ showNavControls ? 'Hide' : 'Controls' }}</span>
-      </button>
+    <div class="live-nav-hud" :class="[`dock-${navDockCorner}`, { collapsed: !showNavControls }]">
+      <div class="hud-top-bar">
+        <button
+          class="nav-toggle-btn glass-panel"
+          @click="showNavControls = !showNavControls"
+          :title="showNavControls ? 'Hide Page Controls' : 'Show TV & Phone Navigation Controls'"
+        >
+          <span class="hud-toggle-icon">{{ showNavControls ? '▼' : '🎮' }}</span>
+          <span class="hud-toggle-label">{{ showNavControls ? 'Hide' : 'Controls' }}</span>
+        </button>
+        <button
+          class="nav-dock-btn glass-panel"
+          @click.stop="cycleNavDock"
+          :title="`Dock Controls: ${navDockCornerLabel}. Click to cycle corner position`"
+        >
+          <span>⚓</span>
+        </button>
+      </div>
 
       <div v-if="showNavControls" class="nav-hud-body glass-panel">
         <!-- Directional D-Pad (Up, Down, Left, Right, Center) -->
@@ -990,14 +1020,62 @@ onUnmounted(() => {
 /* TV & Phone Navigation HUD */
 .live-nav-hud {
   position: absolute;
-  bottom: 24px;
-  right: 24px;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
   gap: 8px;
   z-index: 120;
   user-select: none;
+  transition: top 0.2s ease, bottom 0.2s ease, left 0.2s ease, right 0.2s ease;
+}
+
+.live-nav-hud.dock-bottom-right {
+  bottom: 24px;
+  right: 24px;
+  align-items: flex-end;
+}
+
+.live-nav-hud.dock-bottom-left {
+  bottom: 24px;
+  left: 24px;
+  align-items: flex-start;
+}
+
+.live-nav-hud.dock-top-right {
+  top: 72px;
+  right: 24px;
+  align-items: flex-end;
+}
+
+.live-nav-hud.dock-top-left {
+  top: 72px;
+  left: 24px;
+  align-items: flex-start;
+}
+
+.hud-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-dock-btn {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.nav-dock-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: #ffffff;
+  border-color: #6366f1;
 }
 
 .nav-toggle-btn {
