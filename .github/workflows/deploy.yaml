@@ -72,3 +72,4 @@ jobs:
           token: ${{ secrets.UPDATER_TOKEN }}
           repository: tpickle-py/ha-addons
           event-type: update
+          client-payload: '{"app": "security_hawk"}'
