@@ -210,3 +210,9 @@ class TestKioskMiddleware(SimpleTestCase):
         res_404 = self.client.get("/assets/nonexistent.xyz")
         assert res_404.status_code == 404
 
+    def test_list_entity_ids(self) -> None:
+        res = self.client.get("/api/entities/ids/")
+        assert res.status_code == 200
+        assert "entity_ids" in res.json()
+        assert isinstance(res.json()["entity_ids"], list)
+

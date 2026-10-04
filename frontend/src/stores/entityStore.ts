@@ -2,10 +2,15 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { HAEntity, HAArea, EndpointType } from "@/types/plan";
 import { api } from "@/services/api";
+import { useLiveStore } from "@/stores/liveStore";
 
 export const useEntityStore = defineStore("entity", () => {
   const entities = ref<HAEntity[]>([]);
   const areas = ref<HAArea[]>([]);
+  const allKnownEntityIds = ref<Set<string>>(new Set());
+  const ignoredEntityIds = ref<string[]>(
+    JSON.parse(localStorage.getItem("sh_ignored_entities") || "[]")
+  );
   const unassignedCount = ref(0);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
@@ -16,8 +21,29 @@ export const useEntityStore = defineStore("entity", () => {
   const filterUnassignedOnly = ref(false);
 
   const unassignedEntities = computed(() => {
-    return entities.value.filter((e) => !e.area_id);
+    return entities.value.filter((e) => !e.area_id && !isIgnored(e.entity_id));
   });
+
+  const visibleEntities = computed(() => {
+    return entities.value.filter((e) => !isIgnored(e.entity_id));
+  });
+
+  const ignoredEntities = computed(() => {
+    return entities.value.filter((e) => isIgnored(e.entity_id));
+  });
+
+  async function fetchKnownEntityIds() {
+    try {
+      const res = await api.listEntityIds();
+      if (res.entity_ids) {
+        for (const id of res.entity_ids) {
+          allKnownEntityIds.value.add(id);
+        }
+      }
+    } catch (e: any) {
+      console.warn("Could not list entity IDs:", e.message);
+    }
+  }
 
   async function fetchAreas() {
     try {
@@ -43,12 +69,60 @@ export const useEntityStore = defineStore("entity", () => {
       selectedAreaId.value = areaId;
       filterUnassignedOnly.value = unassignedOnly;
 
-      const res = await api.searchEntities(query, domain, 150, areaId, unassignedOnly);
+      const res = await api.searchEntities(query, domain, 300, areaId, unassignedOnly);
       entities.value = res.entities;
+      for (const ent of res.entities) {
+        allKnownEntityIds.value.add(ent.entity_id);
+      }
     } catch (e: any) {
       error.value = e.message || "Failed to load entities";
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  function isKnownEntity(entityId: string | undefined | null): boolean {
+    if (!entityId) return false;
+    if (allKnownEntityIds.value.has(entityId)) return true;
+    if (entities.value.some((e) => e.entity_id === entityId)) return true;
+    try {
+      const liveStore = useLiveStore();
+      if (liveStore.states && liveStore.states[entityId] !== undefined) {
+        allKnownEntityIds.value.add(entityId);
+        return true;
+      }
+    } catch {
+      // Live store not ready yet
+    }
+    return false;
+  }
+
+  function isIgnored(entityId: string): boolean {
+    return ignoredEntityIds.value.includes(entityId);
+  }
+
+  async function ignoreEntity(entityId: string) {
+    if (!ignoredEntityIds.value.includes(entityId)) {
+      ignoredEntityIds.value.push(entityId);
+      localStorage.setItem("sh_ignored_entities", JSON.stringify(ignoredEntityIds.value));
+      try {
+        await api.saveSettings({ ignored_entities: ignoredEntityIds.value });
+      } catch {
+        // Ignored setting sync fallback
+      }
+    }
+  }
+
+  async function unignoreEntity(entityId: string) {
+    const idx = ignoredEntityIds.value.indexOf(entityId);
+    if (idx !== -1) {
+      ignoredEntityIds.value.splice(idx, 1);
+      localStorage.setItem("sh_ignored_entities", JSON.stringify(ignoredEntityIds.value));
+      try {
+        await api.saveSettings({ ignored_entities: ignoredEntityIds.value });
+      } catch {
+        // Ignored setting sync fallback
+      }
     }
   }
 
@@ -79,30 +153,42 @@ export const useEntityStore = defineStore("entity", () => {
 
   function guessEndpointType(entity: HAEntity): EndpointType {
     const domain = entity.domain || entity.entity_id.split(".")[0];
-    const devClass = entity.device_class || "";
-
-    if (domain === "camera") return "camera";
-
-    if (domain === "binary_sensor") {
-      if (["motion", "occupancy", "presence"].includes(devClass)) {
-        return "motion";
-      }
-      if (["door", "garage_door", "window", "opening"].includes(devClass)) {
-        return "door";
-      }
-    }
-
+    const devClass = (entity.device_class || "").toLowerCase();
     const friendlyLower = (entity.friendly_name || entity.name || "").toLowerCase();
     const idLower = entity.entity_id.toLowerCase();
 
-    if (idLower.includes("motion") || friendlyLower.includes("motion")) {
-      return "motion";
+    if (domain === "camera") return "camera";
+
+    if (devClass === "window" || idLower.includes("window") || friendlyLower.includes("window")) {
+      return "window";
     }
+
     if (
+      devClass === "door" ||
+      devClass === "garage_door" ||
       idLower.includes("door") ||
       friendlyLower.includes("door") ||
-      idLower.includes("window") ||
-      friendlyLower.includes("window")
+      idLower.includes("garage")
+    ) {
+      return "door";
+    }
+
+    if (
+      ["motion", "occupancy", "presence"].includes(devClass) ||
+      idLower.includes("motion") ||
+      friendlyLower.includes("motion") ||
+      friendlyLower.includes("occupancy")
+    ) {
+      return "motion";
+    }
+
+    // Common Zigbee contact sensors (e.g. Sonoff SNZB-04, Aqara MCCGQ)
+    if (
+      devClass === "opening" ||
+      devClass === "contact" ||
+      idLower.includes("snzb04") ||
+      idLower.includes("snzb-04") ||
+      idLower.includes("contact")
     ) {
       return "door";
     }
@@ -113,8 +199,12 @@ export const useEntityStore = defineStore("entity", () => {
   return {
     entities,
     areas,
+    allKnownEntityIds,
+    ignoredEntityIds,
     unassignedCount,
     unassignedEntities,
+    visibleEntities,
+    ignoredEntities,
     isLoading,
     error,
     searchQuery,
@@ -123,6 +213,11 @@ export const useEntityStore = defineStore("entity", () => {
     filterUnassignedOnly,
     fetchAreas,
     fetchEntities,
+    fetchKnownEntityIds,
+    isKnownEntity,
+    isIgnored,
+    ignoreEntity,
+    unignoreEntity,
     designateArea,
     lookupByFriendlyName,
     guessEndpointType,

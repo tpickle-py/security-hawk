@@ -41,7 +41,7 @@ def search_entities(request):
     domain = request.GET.get("domain", "")
     area_id = request.GET.get("area_id", "")
     unassigned_only = request.GET.get("unassigned_area", "").lower() in ("true", "1", "yes")
-    limit = min(int(request.GET.get("limit", "50")), 200)
+    limit = min(int(request.GET.get("limit", "150")), 2000)
 
     results = entity_registry.search(
         query=query,
@@ -51,6 +51,12 @@ def search_entities(request):
         unassigned_only=unassigned_only,
     )
     return JsonResponse({"entities": results})
+
+
+@require_GET
+def list_entity_ids(request):
+    """Return all known entity IDs in Home Assistant."""
+    return JsonResponse({"entity_ids": entity_registry.get_all_entity_ids()})
 
 
 @require_GET

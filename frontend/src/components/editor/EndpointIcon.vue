@@ -19,9 +19,9 @@ const emit = defineEmits<{
 }>();
 
 const coveragePath = computed(() => {
-  if (!props.endpoint.coverage) return null;
-  const range = props.endpoint.coverage.range || (props.endpoint.type === "camera" ? 110 : 75);
-  const angleDeg = props.endpoint.coverage.angle || (props.endpoint.type === "camera" ? 70 : 85);
+  if (props.endpoint.type !== "camera" && !props.endpoint.coverage) return null;
+  const range = props.endpoint.coverage?.range || (props.endpoint.type === "camera" ? 120 : 75);
+  const angleDeg = props.endpoint.coverage?.angle || (props.endpoint.type === "camera" ? 70 : 85);
   const halfRad = (angleDeg / 2) * (Math.PI / 180);
   const x1 = range * Math.cos(-halfRad);
   const y1 = range * Math.sin(-halfRad);
@@ -29,6 +29,10 @@ const coveragePath = computed(() => {
   const y2 = range * Math.sin(halfRad);
   const largeArcFlag = angleDeg > 180 ? 1 : 0;
   return `M 0 0 L ${x1} ${y1} A ${range} ${range} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+});
+
+const coverageRange = computed(() => {
+  return props.endpoint.coverage?.range || (props.endpoint.type === "camera" ? 120 : 75);
 });
 
 const iconHref = computed(() => {
@@ -62,15 +66,31 @@ function handleMouseDown(e: MouseEvent) {
     @mousedown.stop="handleMouseDown"
   >
     <!-- Coverage FOV preview in editor -->
-    <path
-      v-if="coveragePath"
-      :d="coveragePath"
-      :fill="endpoint.type === 'camera' ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)'"
-      :stroke="endpoint.type === 'camera' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(16, 185, 129, 0.35)'"
-      stroke-width="1.2"
-      stroke-dasharray="3 3"
-      class="editor-coverage-cone"
-    />
+    <g v-if="coveragePath" class="editor-coverage-group">
+      <path
+        :d="coveragePath"
+        :fill="endpoint.type === 'camera' ? (isSelected ? 'rgba(99, 102, 241, 0.18)' : 'rgba(99, 102, 241, 0.09)') : 'rgba(16, 185, 129, 0.09)'"
+        :stroke="endpoint.type === 'camera' ? (isSelected ? '#818cf8' : 'rgba(99, 102, 241, 0.45)') : 'rgba(16, 185, 129, 0.45)'"
+        :stroke-width="isSelected ? 1.8 : 1.2"
+        stroke-dasharray="3 3"
+        class="editor-coverage-cone"
+      />
+      <!-- Directional Aiming Vector (Center axis line & arrow tip) -->
+      <line
+        x1="0"
+        y1="0"
+        :x2="coverageRange"
+        y2="0"
+        :stroke="endpoint.type === 'camera' ? (isSelected ? '#a5b4fc' : 'rgba(99, 102, 241, 0.4)') : 'rgba(16, 185, 129, 0.4)'"
+        stroke-width="1.2"
+        stroke-dasharray="2 2"
+      />
+      <!-- Aiming pointer tip -->
+      <polygon
+        :points="`${coverageRange},0 ${coverageRange - 8},-4 ${coverageRange - 8},4`"
+        :fill="endpoint.type === 'camera' ? (isSelected ? '#818cf8' : 'rgba(99, 102, 241, 0.6)') : 'rgba(16, 185, 129, 0.6)'"
+      />
+    </g>
 
     <!-- Selection highlight circle -->
     <circle

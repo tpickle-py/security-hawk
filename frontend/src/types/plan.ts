@@ -261,5 +261,6 @@ export interface AppSettings {
     prefix: string;
   };
   notifications?: NotificationSettings;
+  ignored_entities?: string[];
 }
 

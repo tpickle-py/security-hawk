@@ -20,8 +20,8 @@ const entityStore = useEntityStore();
 const { extractVertices, snapCoordinate } = useSnapEngine();
 
 function isOrphaned(ep: Endpoint) {
-  if (ep.type === "composite" || entityStore.entities.length === 0) return false;
-  return !entityStore.entities.some((e) => e.entity_id === ep.entity_id);
+  if (ep.type === "composite") return false;
+  return !entityStore.isKnownEntity(ep.entity_id);
 }
 
 const svgRef = ref<SVGSVGElement | null>(null);
@@ -327,7 +327,12 @@ function onDrop(e: DragEvent) {
       label: data.label || data.entity_id,
       companions: [],
       cameras: [],
-      coverage: null,
+      coverage:
+        data.type === "camera"
+          ? { type: "cone", range: 120, angle: 70 }
+          : data.type === "motion"
+          ? { type: "cone", range: 85, angle: 85 }
+          : null,
       stale_after: null,
     };
 

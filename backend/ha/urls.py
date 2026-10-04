@@ -13,6 +13,7 @@ urlpatterns = [
     path(
         "entities/<str:entity_id>/area/", views.designate_entity_area, name="designate_entity_area"
     ),
+    path("entities/ids/", views.list_entity_ids, name="list_entity_ids"),
     path("entities/<str:entity_id>/", views.get_entity, name="get_entity"),
     path("camera/<str:entity_id>/", views.camera_snapshot, name="camera_snapshot"),
     path("camera/<str:entity_id>/stream/", views.camera_stream, name="camera_stream"),

@@ -191,19 +191,49 @@ class EntityRegistry:
             if area_id and ent_area_id != area_id:
                 continue
 
-            # Domain filter
-            if domain and not eid.startswith(f"{domain}."):
-                continue
-
-            # Skip hidden entities
-            if entity.get("hidden_by"):
-                continue
-
             # State and friendly name
             state = self._states.get(eid, {})
             attributes = state.get("attributes", {})
             friendly_name = attributes.get("friendly_name") or entity.get("name") or eid
             reg_name = entity.get("name", "") or ""
+            device_class = (attributes.get("device_class") or entity.get("device_class") or "").lower()
+
+            # Domain / category filter
+            if domain:
+                fn_lower = friendly_name.lower()
+                eid_lower = eid.lower()
+                if domain == "motion":
+                    is_motion = (
+                        (eid.startswith("binary_sensor.") and device_class in ("motion", "occupancy", "presence"))
+                        or "motion" in eid_lower
+                        or "motion" in fn_lower
+                        or "occupancy" in fn_lower
+                    )
+                    if not is_motion:
+                        continue
+                elif domain == "door":
+                    is_door = (
+                        (eid.startswith("binary_sensor.") and device_class in ("door", "garage_door", "opening"))
+                        or "door" in eid_lower
+                        or "door" in fn_lower
+                        or "garage" in eid_lower
+                    )
+                    if not is_door:
+                        continue
+                elif domain == "window":
+                    is_window = (
+                        (eid.startswith("binary_sensor.") and device_class == "window")
+                        or "window" in eid_lower
+                        or "window" in fn_lower
+                    )
+                    if not is_window:
+                        continue
+                elif not eid.startswith(f"{domain}."):
+                    continue
+
+            # Skip hidden entities
+            if entity.get("hidden_by"):
+                continue
 
             # Text search (searches friendly_name, entity_id, and area_name)
             if query_lower:
@@ -237,7 +267,11 @@ class EntityRegistry:
 
     def check_missing(self, entity_ids: set[str]) -> list[str]:
         """Return entity IDs that are not found in the registry (stale endpoints)."""
-        return [eid for eid in entity_ids if eid not in self._entities]
+        return [eid for eid in entity_ids if eid not in self._entities and eid not in self._states]
+
+    def get_all_entity_ids(self) -> list[str]:
+        """Return list of all known entity IDs from entities and states."""
+        return sorted(list(set(self._entities.keys()) | set(self._states.keys())))
 
 
 # Module-level singleton

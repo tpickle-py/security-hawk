@@ -190,10 +190,19 @@ function deleteSubArea(id: string) {
 
 // 1. Orphan Entity Detection (Missing from HA)
 const isEntityOrphaned = computed(() => {
-  if (!selectedEndpoint.value || entityStore.entities.length === 0) return false;
+  if (!selectedEndpoint.value) return false;
   if (selectedEndpoint.value.type === "composite") return false;
-  return !entityStore.entities.some((e) => e.entity_id === selectedEndpoint.value?.entity_id);
+  return !entityStore.isKnownEntity(selectedEndpoint.value.entity_id);
 });
+
+function updateEntityId(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (!selectedEndpoint.value) return;
+  const newEid = target.value.trim();
+  if (newEid) {
+    planStore.updateEndpoint(selectedEndpoint.value.id, { entity_id: newEid });
+  }
+}
 
 // 2. Companion Entities Management (Spec §Endpoints)
 const selectedCompanionToAdd = ref("");
@@ -306,7 +315,7 @@ function toggleCoverage(e: Event) {
   const target = e.target as HTMLInputElement;
   if (!selectedEndpoint.value) return;
   if (target.checked) {
-    const defaultRange = selectedEndpoint.value.type === "camera" ? 110 : 75;
+    const defaultRange = selectedEndpoint.value.type === "camera" ? 120 : 75;
     const defaultAngle = selectedEndpoint.value.type === "camera" ? 70 : 85;
     planStore.updateEndpoint(selectedEndpoint.value.id, {
       coverage: { type: "cone", range: defaultRange, angle: defaultAngle },
@@ -318,19 +327,29 @@ function toggleCoverage(e: Event) {
 
 function updateCoverageRange(e: Event) {
   const target = e.target as HTMLInputElement;
-  if (!selectedEndpoint.value || !selectedEndpoint.value.coverage) return;
+  if (!selectedEndpoint.value) return;
   const range = parseInt(target.value, 10);
+  const currentCoverage = selectedEndpoint.value.coverage || {
+    type: "cone",
+    range: 120,
+    angle: selectedEndpoint.value.type === "camera" ? 70 : 85,
+  };
   planStore.updateEndpoint(selectedEndpoint.value.id, {
-    coverage: { ...selectedEndpoint.value.coverage, range },
+    coverage: { ...currentCoverage, range },
   });
 }
 
 function updateCoverageAngle(e: Event) {
   const target = e.target as HTMLInputElement;
-  if (!selectedEndpoint.value || !selectedEndpoint.value.coverage) return;
+  if (!selectedEndpoint.value) return;
   const angle = parseInt(target.value, 10);
+  const currentCoverage = selectedEndpoint.value.coverage || {
+    type: "cone",
+    range: selectedEndpoint.value.type === "camera" ? 120 : 75,
+    angle: 70,
+  };
   planStore.updateEndpoint(selectedEndpoint.value.id, {
-    coverage: { ...selectedEndpoint.value.coverage, angle },
+    coverage: { ...currentCoverage, angle },
   });
 }
 </script>
@@ -435,10 +454,16 @@ function updateCoverageAngle(e: Event) {
         </div>
       </div>
 
-      <!-- Entity ID (Read-only) -->
+      <!-- Entity ID (Editable) -->
       <div class="prop-group">
         <label>Entity ID</label>
-        <input type="text" :value="selectedEndpoint.entity_id" readonly class="readonly-input" />
+        <input
+          type="text"
+          :value="selectedEndpoint.entity_id"
+          @change="updateEntityId"
+          placeholder="e.g. camera.living_room or binary_sensor.front_door"
+        />
+        <p class="field-help">Home Assistant entity ID providing states and video/snapshots.</p>
       </div>
 
       <!-- Orphan Entity Warning (Spec §Editing behaviour) -->
@@ -540,29 +565,32 @@ function updateCoverageAngle(e: Event) {
       <!-- Coverage Cone / Field of View (Spec §Coverage) -->
       <div class="prop-group" v-if="selectedEndpoint.type === 'motion' || selectedEndpoint.type === 'camera'">
         <div class="prop-row-header">
-          <label>Detection / Coverage FOV</label>
+          <label>{{ selectedEndpoint.type === 'camera' ? 'Camera Field of View & Depth' : 'Detection / Coverage FOV' }}</label>
           <label class="toggle-switch">
             <input
               type="checkbox"
-              :checked="!!selectedEndpoint.coverage"
+              :checked="!!selectedEndpoint.coverage || selectedEndpoint.type === 'camera'"
               @change="toggleCoverage"
             />
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <p class="field-help">Visual field-of-view or PIR detection sector on the floor plan.</p>
+        <p class="field-help">
+          {{ selectedEndpoint.type === 'camera' ? 'Adjust camera depth of view (distance) and field-of-view angle on the floor plan.' : 'Visual field-of-view or PIR detection sector on the floor plan.' }}
+        </p>
 
-        <div v-if="selectedEndpoint.coverage" class="coverage-controls-box">
+        <div v-if="selectedEndpoint.coverage || selectedEndpoint.type === 'camera'" class="coverage-controls-box">
           <div class="slider-row">
             <div class="slider-info">
-              <span>Detection Range</span>
-              <span class="val-tag">{{ selectedEndpoint.coverage.range }}px</span>
+              <span>Depth of View (Range)</span>
+              <span class="val-tag">{{ (selectedEndpoint.coverage?.range ?? (selectedEndpoint.type === 'camera' ? 120 : 75)) }}px</span>
             </div>
             <input
               type="range"
               min="30"
-              max="250"
-              :value="selectedEndpoint.coverage.range"
+              max="500"
+              step="5"
+              :value="selectedEndpoint.coverage?.range ?? (selectedEndpoint.type === 'camera' ? 120 : 75)"
               @input="updateCoverageRange"
               class="range-slider"
             />
@@ -570,14 +598,15 @@ function updateCoverageAngle(e: Event) {
 
           <div class="slider-row">
             <div class="slider-info">
-              <span>Beam Angle</span>
-              <span class="val-tag">{{ selectedEndpoint.coverage.angle }}°</span>
+              <span>Field of View (Angle)</span>
+              <span class="val-tag">{{ (selectedEndpoint.coverage?.angle ?? (selectedEndpoint.type === 'camera' ? 70 : 85)) }}°</span>
             </div>
             <input
               type="range"
               min="15"
               max="180"
-              :value="selectedEndpoint.coverage.angle"
+              step="5"
+              :value="selectedEndpoint.coverage?.angle ?? (selectedEndpoint.type === 'camera' ? 70 : 85)"
               @input="updateCoverageAngle"
               class="range-slider"
             />

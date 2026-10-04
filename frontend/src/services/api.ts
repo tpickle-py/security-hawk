@@ -160,6 +160,12 @@ export const api = {
     return res.json();
   },
 
+  async listEntityIds(): Promise<{ entity_ids: string[] }> {
+    const res = await fetch(`${BASE_URL}/api/entities/ids/`);
+    if (!res.ok) throw new Error("Failed to list entity IDs");
+    return res.json();
+  },
+
   async listAreas(): Promise<{ areas: HAArea[]; total_areas: number; unassigned_entities_count: number }> {
     const res = await fetch(`${BASE_URL}/api/areas/`);
     if (!res.ok) throw new Error("Failed to list areas");

@@ -11,7 +11,7 @@ const planStore = usePlanStore();
 
 const query = ref("");
 const selectedDomain = ref("");
-const activeTab = ref<"all" | "unassigned" | "rules">("all");
+const activeTab = ref<"all" | "unassigned" | "rules" | "ignored">("all");
 const selectedArea = ref("");
 const designatingEntityId = ref<string | null>(null);
 
@@ -23,9 +23,10 @@ const ruleToEdit = ref<CompositeRule | null>(null);
 
 const domains = [
   { label: "All", value: "" },
-  { label: "Motion", value: "binary_sensor" },
   { label: "Cameras", value: "camera" },
-  { label: "Doors", value: "binary_sensor" },
+  { label: "Motion", value: "motion" },
+  { label: "Doors", value: "door" },
+  { label: "Windows", value: "window" },
 ];
 
 const placedEntityCounts = computed(() => {
@@ -72,14 +73,36 @@ async function fetchRules() {
   }
 }
 
-function switchTab(tab: "all" | "unassigned" | "rules") {
+function switchTab(tab: "all" | "unassigned" | "rules" | "ignored") {
   activeTab.value = tab;
   if (tab === "rules") {
     fetchRules();
+  } else if (tab === "ignored") {
+    // rendered from ignoredEntitiesList
   } else {
     handleSearch();
   }
 }
+
+const ignoredEntitiesList = computed(() => {
+  const q = query.value.toLowerCase().trim();
+  return entityStore.ignoredEntityIds
+    .map((eid) => {
+      const ent = entityStore.entities.find((e) => e.entity_id === eid);
+      return {
+        entity_id: eid,
+        friendly_name: ent?.friendly_name || ent?.name || eid,
+        area_name: ent?.area_name,
+        type: ent ? entityStore.guessEndpointType(ent) : "generic",
+      };
+    })
+    .filter(
+      (e) =>
+        !q ||
+        e.entity_id.toLowerCase().includes(q) ||
+        e.friendly_name.toLowerCase().includes(q)
+    );
+});
 
 async function handleDesignateArea(entityId: string, e: Event) {
   const target = e.target as HTMLSelectElement;
@@ -147,6 +170,7 @@ const filteredRules = computed(() => {
 
 onMounted(async () => {
   await Promise.all([
+    entityStore.fetchKnownEntityIds(),
     entityStore.fetchAreas(),
     entityStore.fetchEntities("", ""),
     fetchRules(),
@@ -188,6 +212,17 @@ onMounted(async () => {
         <span>⚡ Rules</span>
         <span class="count-pill rules-pill" v-if="rules.length > 0">
           {{ rules.length }}
+        </span>
+      </button>
+      <button
+        class="tab-btn hidden-tab-btn"
+        :class="{ active: activeTab === 'ignored' }"
+        @click="switchTab('ignored')"
+        title="View hidden/ignored entities"
+      >
+        <span>Hidden</span>
+        <span class="count-pill ignored-pill" v-if="entityStore.ignoredEntityIds.length > 0">
+          {{ entityStore.ignoredEntityIds.length }}
         </span>
       </button>
     </div>
@@ -299,16 +334,55 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- IGNORED / HIDDEN ENTITIES VIEW -->
+    <div v-else-if="activeTab === 'ignored'" class="entity-list">
+      <div v-if="ignoredEntitiesList.length === 0" class="list-state">
+        <p>No hidden entities.</p>
+        <span class="hint-text">Click the Hide button on any entity to hide it from Security Hawk.</span>
+      </div>
+      <div
+        v-for="ent in ignoredEntitiesList"
+        :key="ent.entity_id"
+        class="entity-item ignored-item"
+      >
+        <div class="entity-icon-badge" :class="ent.type">
+          <span v-if="ent.type === 'motion'">🏃</span>
+          <span v-else-if="ent.type === 'door'">🚪</span>
+          <span v-else-if="ent.type === 'window'">🪟</span>
+          <span v-else-if="ent.type === 'camera'">📹</span>
+          <span v-else>📡</span>
+        </div>
+        <div class="entity-details">
+          <div class="entity-name" :title="ent.friendly_name">
+            {{ ent.friendly_name }}
+          </div>
+          <div class="entity-sub">
+            <span class="entity-id" :title="ent.entity_id">{{ ent.entity_id }}</span>
+          </div>
+          <div v-if="ent.area_name" class="area-designation-row">
+            <span class="area-tag">📍 {{ ent.area_name }}</span>
+          </div>
+        </div>
+        <button
+          class="btn-unhide-entity"
+          title="Unhide / Restore this entity to Security Hawk"
+          @click.stop="entityStore.unignoreEntity(ent.entity_id)"
+        >
+          👁️ Restore
+        </button>
+      </div>
+    </div>
+
     <!-- ENTITY LIST (HA Physical Entities) -->
     <div v-else class="entity-list">
       <div v-if="entityStore.isLoading" class="list-state">Loading entities...</div>
-      <div v-else-if="entityStore.entities.length === 0" class="list-state">
+      <div v-else-if="(activeTab === 'unassigned' ? entityStore.unassignedEntities.length : entityStore.visibleEntities.length) === 0" class="list-state">
         <span v-if="activeTab === 'unassigned'">All entities have been assigned to rooms! 🎉</span>
         <span v-else>No matching entities found.</span>
       </div>
 
       <div
-        v-for="ent in entityStore.entities"
+        v-for="ent in (activeTab === 'unassigned' ? entityStore.unassignedEntities : entityStore.visibleEntities)"
         :key="ent.entity_id"
         class="entity-item"
         :class="{ placed: (placedEntityCounts.get(ent.entity_id) || 0) > 0 }"
@@ -318,6 +392,7 @@ onMounted(async () => {
         <div class="entity-icon-badge" :class="entityStore.guessEndpointType(ent)">
           <span v-if="entityStore.guessEndpointType(ent) === 'motion'">🏃</span>
           <span v-else-if="entityStore.guessEndpointType(ent) === 'door'">🚪</span>
+          <span v-else-if="entityStore.guessEndpointType(ent) === 'window'">🪟</span>
           <span v-else-if="entityStore.guessEndpointType(ent) === 'camera'">📹</span>
           <span v-else>📡</span>
         </div>
@@ -369,13 +444,25 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div
-          v-if="(placedEntityCounts.get(ent.entity_id) || 0) > 0"
-          class="placed-badge"
-          :title="`Placed ${placedEntityCounts.get(ent.entity_id)} time(s) on floor. Drag to place another duplicate instance.`"
-        >
-          <span v-if="(placedEntityCounts.get(ent.entity_id) || 0) === 1">Placed</span>
-          <span v-else>Placed ×{{ placedEntityCounts.get(ent.entity_id) }}</span>
+        <div class="entity-actions-col">
+          <div
+            v-if="(placedEntityCounts.get(ent.entity_id) || 0) > 0"
+            class="placed-badge"
+            :title="`Placed ${placedEntityCounts.get(ent.entity_id)} time(s) on floor.`"
+          >
+            <span v-if="(placedEntityCounts.get(ent.entity_id) || 0) === 1">Placed</span>
+            <span v-else>Placed ×{{ placedEntityCounts.get(ent.entity_id) }}</span>
+          </div>
+          <button
+            class="btn-hide-entity"
+            title="Hide / Ignore this entity"
+            @click.stop="entityStore.ignoreEntity(ent.entity_id)"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13">
+              <path fill="currentColor" d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.72L3.27,3L2,4.27Z"/>
+            </svg>
+            <span>Hide</span>
+          </button>
         </div>
       </div>
     </div>
@@ -745,5 +832,73 @@ onMounted(async () => {
   background: rgba(239, 68, 68, 0.2);
   color: #fca5a5;
   border-color: rgba(239, 68, 68, 0.4);
+}
+
+.entity-actions-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.btn-hide-entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 2px 5px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+}
+
+.entity-item:hover .btn-hide-entity {
+  opacity: 1;
+}
+
+.btn-hide-entity:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.btn-unhide-entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-unhide-entity:hover {
+  background: rgba(99, 102, 241, 0.35);
+  color: #ffffff;
+}
+
+.ignored-item {
+  opacity: 0.75;
+}
+
+.ignored-pill {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #fca5a5 !important;
+}
+
+.hint-text {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 6px;
 }
 </style>
