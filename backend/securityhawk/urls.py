@@ -34,6 +34,40 @@ def health_check(request):
     return JsonResponse({"status": "ok", "version": "0.2.0"})
 
 
+def asset_view(request, path):
+    """Serve built frontend assets (JS/CSS/fonts) or user-uploaded plan assets."""
+    # 1. Built frontend assets in static/frontend/assets
+    frontend_assets_dir = settings.BASE_DIR / "static" / "frontend" / "assets"
+    if (frontend_assets_dir / path).is_file():
+        return serve(request, path, document_root=str(frontend_assets_dir))
+
+    # Also check collected_static if present
+    if settings.STATIC_ROOT:
+        collected_frontend = settings.STATIC_ROOT / "frontend" / "assets"
+        if (collected_frontend / path).is_file():
+            return serve(request, path, document_root=str(collected_frontend))
+
+    # 2. User-uploaded plan assets in DATA_DIR / assets
+    if (settings.ASSETS_DIR / path).is_file():
+        return serve(request, path, document_root=str(settings.ASSETS_DIR))
+
+    from django.http import Http404
+    raise Http404(f"Asset '{path}' not found")
+
+
+def static_view(request, path):
+    """Serve collected or local static files."""
+    if settings.STATIC_ROOT and (settings.STATIC_ROOT / path).is_file():
+        return serve(request, path, document_root=str(settings.STATIC_ROOT))
+
+    static_dir = settings.BASE_DIR / "static"
+    if (static_dir / path).is_file():
+        return serve(request, path, document_root=str(static_dir))
+
+    from django.http import Http404
+    raise Http404(f"Static file '{path}' not found")
+
+
 urlpatterns = [
     # Health check
     path("api/health/", health_check),
@@ -42,12 +76,10 @@ urlpatterns = [
     path("api/", include("ha.urls")),
     path("api/", include("rules.urls")),
     path("api/", include("settings_mgr.urls")),
-    # Serve uploaded assets from DATA_DIR
-    path(
-        "assets/<path:path>",
-        serve,
-        {"document_root": settings.ASSETS_DIR},
-    ),
+    # Serve assets (frontend JS/CSS/fonts or user uploaded plan assets)
+    path("assets/<path:path>", asset_view, name="assets"),
+    # Serve static files
+    path("static/<path:path>", static_view, name="static"),
     # Vue SPA catch-all (must be last)
     re_path(r"^(?!api/|ws/|static/|assets/).*$", spa_view),
 ]

@@ -145,6 +145,7 @@ class HAWebSocketClient:
 
     async def _connect_loop(self) -> None:
         """Reconnect loop with exponential backoff."""
+        self._running = True
         backoff = 1.0
         while self._running:
             try:
@@ -154,10 +155,14 @@ class HAWebSocketClient:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30.0)
             else:
-                backoff = 1.0  # Reset on clean disconnect
+                if self._running:
+                    logger.warning("HA WS connection closed — reconnecting in %.0fs", backoff)
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 30.0)
 
     async def _run_connection(self) -> None:
         """Single connection lifecycle: auth → subscribe → listen."""
+        self._running = True
         logger.info("Connecting to HA WebSocket at %s", WS_URL)
 
         async with websockets.connect(WS_URL) as ws:

@@ -5,6 +5,12 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-10-04
+
+### Fixed
+- **Frontend Assets 404**: Configure `asset_view` in `urls.py` to serve Vite JS/CSS/font bundles from `static/frontend/assets` before checking user-uploaded plan assets.
+- **WebSocket Reconnect Tight-Loop**: Ensure `HAWebSocketClient._running` is `True` and run `_connect_loop()` in the background listener thread with backoff delays, preventing rapid reconnect loops and redundant registry refreshes.
+
 ## [0.3.7] - 2026-10-04
 
 ### Changed

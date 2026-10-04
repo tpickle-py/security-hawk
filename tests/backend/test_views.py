@@ -200,3 +200,13 @@ class TestKioskMiddleware(SimpleTestCase):
         )
         assert res_ingress.status_code == 200
 
+    def test_asset_and_static_serving(self) -> None:
+        # Requesting a real asset from static/frontend/assets returns 200
+        res = self.client.get("/assets/index-CzOlcDAN.css")
+        assert res.status_code == 200
+        assert "text/css" in res["Content-Type"]
+
+        # Requesting a non-existent asset returns 404
+        res_404 = self.client.get("/assets/nonexistent.xyz")
+        assert res_404.status_code == 404
+

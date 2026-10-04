@@ -45,8 +45,8 @@ def start_ha_listener() -> None:
                     "Initial entity registry refresh failed (will retry if WS connects): %s", e
                 )
 
-            # Start persistent WS connection loop
-            await client._run_connection()
+            # Start persistent WS connection loop with auto-reconnect
+            await client._connect_loop()
 
         # Run loop with retry on unhandled exceptions
         while True:
@@ -54,10 +54,10 @@ def start_ha_listener() -> None:
                 loop.run_until_complete(_main())
             except Exception as e:
                 logger.error("HA background listener error: %s. Reconnecting in 5 seconds...", e)
-                try:
-                    loop.run_until_complete(asyncio.sleep(5))
-                except Exception:
-                    break
+            try:
+                loop.run_until_complete(asyncio.sleep(5))
+            except Exception:
+                break
 
     thread = threading.Thread(target=_run_background, name="ha-listener-thread", daemon=True)
     thread.start()
