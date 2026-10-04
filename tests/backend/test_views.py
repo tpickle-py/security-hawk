@@ -191,3 +191,12 @@ class TestKioskMiddleware(SimpleTestCase):
         res_ok = self.client.get("/", SERVER_PORT="8099", REMOTE_ADDR="172.30.32.2")
         assert res_ok.status_code == 200
 
+        # Ingress port 8099 proxied with X-Ingress-Path header should be allowed even with client IP
+        res_ingress = self.client.get(
+            "/",
+            SERVER_PORT="8099",
+            REMOTE_ADDR="192.168.87.89",
+            HTTP_X_INGRESS_PATH="/api/hassio_ingress/token",
+        )
+        assert res_ingress.status_code == 200
+

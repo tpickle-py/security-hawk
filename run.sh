@@ -1,26 +1,50 @@
 #!/usr/bin/env bashio
 
-# Read options (with fallbacks if Supervisor API is unavailable)
+# Import environment variables captured by s6-overlay (SUPERVISOR_TOKEN, etc.)
+for env_dir in /var/run/s6/container_environment /run/s6-container-environment /run/s6/container_environment; do
+    if [ -d "$env_dir" ]; then
+        for var_file in "$env_dir"/*; do
+            if [ -f "$var_file" ]; then
+                var_name=$(basename "$var_file")
+                if [ "$var_name" != "PATH" ] && [ "$var_name" != "PWD" ] && [ "$var_name" != "SHLVL" ]; then
+                    export "$var_name=$(cat "$var_file")"
+                fi
+            fi
+        done
+    fi
+done
+
+# Read options (prefer /data/options.json if present, then bashio, then defaults)
 KIOSK_ENABLED="false"
 KIOSK_PORT="8100"
 KIOSK_TOKEN=""
 QUIET_RETURN="120"
 DEFAULT_VIEW="overview"
 
-if bashio::config.has_value 'kiosk_enabled' 2>/dev/null; then
-    KIOSK_ENABLED=$(bashio::config 'kiosk_enabled' 2>/dev/null || echo "false")
-fi
-if bashio::config.has_value 'kiosk_port' 2>/dev/null; then
-    KIOSK_PORT=$(bashio::config 'kiosk_port' 2>/dev/null || echo "8100")
-fi
-if bashio::config.has_value 'kiosk_token' 2>/dev/null; then
-    KIOSK_TOKEN=$(bashio::config 'kiosk_token' 2>/dev/null || echo "")
-fi
-if bashio::config.has_value 'quiet_return_seconds' 2>/dev/null; then
-    QUIET_RETURN=$(bashio::config 'quiet_return_seconds' 2>/dev/null || echo "120")
-fi
-if bashio::config.has_value 'default_view' 2>/dev/null; then
-    DEFAULT_VIEW=$(bashio::config 'default_view' 2>/dev/null || echo "overview")
+OPTIONS_FILE="/data/options.json"
+if [ -f "$OPTIONS_FILE" ] && command -v jq >/dev/null 2>&1; then
+    bashio::log.info "Loading options from $OPTIONS_FILE"
+    KIOSK_ENABLED=$(jq -r '.kiosk_enabled // false' "$OPTIONS_FILE" 2>/dev/null || echo "false")
+    KIOSK_PORT=$(jq -r '.kiosk_port // 8100' "$OPTIONS_FILE" 2>/dev/null || echo "8100")
+    KIOSK_TOKEN=$(jq -r '.kiosk_token // empty' "$OPTIONS_FILE" 2>/dev/null || echo "")
+    QUIET_RETURN=$(jq -r '.quiet_return_seconds // 120' "$OPTIONS_FILE" 2>/dev/null || echo "120")
+    DEFAULT_VIEW=$(jq -r '.default_view // "overview"' "$OPTIONS_FILE" 2>/dev/null || echo "overview")
+else
+    if bashio::config.has_value 'kiosk_enabled' 2>/dev/null; then
+        KIOSK_ENABLED=$(bashio::config 'kiosk_enabled' 2>/dev/null || echo "false")
+    fi
+    if bashio::config.has_value 'kiosk_port' 2>/dev/null; then
+        KIOSK_PORT=$(bashio::config 'kiosk_port' 2>/dev/null || echo "8100")
+    fi
+    if bashio::config.has_value 'kiosk_token' 2>/dev/null; then
+        KIOSK_TOKEN=$(bashio::config 'kiosk_token' 2>/dev/null || echo "")
+    fi
+    if bashio::config.has_value 'quiet_return_seconds' 2>/dev/null; then
+        QUIET_RETURN=$(bashio::config 'quiet_return_seconds' 2>/dev/null || echo "120")
+    fi
+    if bashio::config.has_value 'default_view' 2>/dev/null; then
+        DEFAULT_VIEW=$(bashio::config 'default_view' 2>/dev/null || echo "overview")
+    fi
 fi
 
 # Fallback values if empty

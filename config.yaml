@@ -1,5 +1,5 @@
 name: "Security Hawk"
-version: "0.3.4"
+version: "0.3.5"
 slug: "security_hawk"
 description: "Floor plan viewer with live sensor and camera state"
 url: "https://github.com/tpickle/security-hawk"

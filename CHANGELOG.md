@@ -5,6 +5,13 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-10-04
+
+### Fixed
+- **Ingress 403 Forbidden**: Support `X-Ingress-Path` and local subnets in `IngressMiddleware` when client IP headers (`X-Forwarded-For`) are forwarded by Daphne.
+- **Supervisor API & Token Handling**: Automatically import environment variables saved by `s6-overlay` in `/var/run/s6/container_environment/` so `SUPERVISOR_TOKEN` is available to `bashio` and the Django background listener.
+- **Direct Options Loading**: Read `/data/options.json` directly with `jq` in `run.sh` to avoid redundant Supervisor API roundtrips during container boot.
+
 ## [0.3.4] - 2026-10-04
 
 ### Changed
