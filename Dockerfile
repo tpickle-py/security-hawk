@@ -1,5 +1,5 @@
-# Stage 1: Build Vue frontend
-FROM node:20-alpine AS frontend-build
+# Stage 1: Build Vue frontend (native runner architecture for lightning-fast bundling)
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
