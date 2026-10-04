@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore, VIEWPORT_CONFIGS } from "@/stores/editorStore";
 import { usePlanStore } from "@/stores/planStore";
 import { useEntityStore } from "@/stores/entityStore";
 import { useSvgPanZoom } from "@/composables/useSvgPanZoom";
@@ -247,20 +247,35 @@ function handleWallClick(wallId: string, clickPoint: { x: number; y: number }) {
   });
 }
 
+let dragMovementOccurred = false;
+let pendingSelectionEndpoint: string | null = null;
+
 function handleEndpointSelect(ep: Endpoint, e: MouseEvent) {
+  // If user clicked an endpoint that is already in multi-selection without Shift,
+  // do not immediately collapse the selection—wait until mouseup so they can drag all selected items!
+  if (editorStore.selectedEndpointIds.length > 1 && editorStore.isEndpointSelected(ep.id) && !e.shiftKey) {
+    pendingSelectionEndpoint = ep.id;
+    return;
+  }
+  pendingSelectionEndpoint = null;
   editorStore.selectEndpoint(ep.id, e.shiftKey);
 }
 
 function handleEndpointDragStart(ep: Endpoint, e: MouseEvent) {
   if (editorStore.activeTool !== "select") return;
 
-  // If endpoint is not selected, make it selected (respecting shiftKey)
+  // If endpoint is not selected, make it selected
   if (!editorStore.isEndpointSelected(ep.id)) {
     editorStore.selectEndpoint(ep.id, e.shiftKey);
+    pendingSelectionEndpoint = null;
   }
 
   isDraggingEndpoints.value = true;
+  dragMovementOccurred = false;
   dragStartSvg.value = screenToSvg(e.clientX, e.clientY);
+
+  // Take undo snapshot ONCE at start of drag
+  planStore.snapshotBeforeMutation();
 
   // Record initial positions of all selected endpoints
   const posMap = new Map<string, { x: number; y: number }>();
@@ -274,16 +289,20 @@ function handleEndpointDragStart(ep: Endpoint, e: MouseEvent) {
   const onDocMouseMove = (moveEvent: MouseEvent) => {
     if (!isDraggingEndpoints.value) return;
     const currentSvg = screenToSvg(moveEvent.clientX, moveEvent.clientY);
-    const dx = currentSvg.x - dragStartSvg.value.x;
-    const dy = currentSvg.y - dragStartSvg.value.y;
+    const dx = Math.round(currentSvg.x - dragStartSvg.value.x);
+    const dy = Math.round(currentSvg.y - dragStartSvg.value.y);
 
-    // Move all selected endpoints together
-    for (const [id, initialPos] of initialEndpointPositions.value.entries()) {
-      planStore.updateEndpoint(id, {
-        x: initialPos.x + dx,
-        y: initialPos.y + dy,
-      });
+    if (Math.hypot(dx, dy) >= 2) {
+      dragMovementOccurred = true;
     }
+
+    // Move all selected endpoints smoothly in real time without snapshotting history on every frame
+    const updates = Array.from(initialEndpointPositions.value.entries()).map(([id, initialPos]) => ({
+      id,
+      x: initialPos.x + dx,
+      y: initialPos.y + dy,
+    }));
+    planStore.batchUpdateEndpoints(updates, false);
   };
 
   const onDocMouseUp = () => {
@@ -291,10 +310,66 @@ function handleEndpointDragStart(ep: Endpoint, e: MouseEvent) {
     initialEndpointPositions.value.clear();
     window.removeEventListener("mousemove", onDocMouseMove);
     window.removeEventListener("mouseup", onDocMouseUp);
+
+    if (dragMovementOccurred) {
+      planStore.markDirtyAndAutosave();
+    } else if (pendingSelectionEndpoint) {
+      // User simply clicked one of the multiple selected items without dragging
+      editorStore.selectEndpoint(pendingSelectionEndpoint, false);
+    }
+    pendingSelectionEndpoint = null;
   };
 
   window.addEventListener("mousemove", onDocMouseMove);
   window.addEventListener("mouseup", onDocMouseUp);
+}
+
+// Viewport Simulator State
+const activeViewportConfig = computed(() => {
+  if (editorStore.activeViewport === "freeform") return null;
+  return VIEWPORT_CONFIGS[editorStore.activeViewport] || null;
+});
+
+const viewportRect = computed(() => {
+  const cfg = activeViewportConfig.value;
+  if (!cfg || cfg.width <= 0) return null;
+
+  // Find center of floor plan
+  let centerX = 600;
+  let centerY = 450;
+  const bg = planStore.currentFloor?.background;
+  if (bg && bg.width > 0 && bg.height > 0) {
+    centerX = bg.x + bg.width / 2;
+    centerY = bg.y + bg.height / 2;
+  }
+
+  const baseDim = bg && bg.width > 0 ? Math.max(bg.width, bg.height) : 900;
+  const scale = Math.max(baseDim / Math.min(cfg.width, cfg.height), 0.8);
+  const frameW = Math.round(cfg.width * scale);
+  const frameH = Math.round(cfg.height * scale);
+
+  return {
+    x: Math.round(centerX - frameW / 2),
+    y: Math.round(centerY - frameH / 2),
+    width: frameW,
+    height: frameH,
+    rawWidth: cfg.width,
+    rawHeight: cfg.height,
+    label: cfg.label,
+    aspect: cfg.aspectRatio,
+  };
+});
+
+function fitViewToActiveViewport() {
+  if (!svgRef.value || !viewportRect.value) return;
+  const rect = svgRef.value.getBoundingClientRect();
+  const vr = viewportRect.value;
+  editorStore.fitToView(rect.width, rect.height, {
+    minX: vr.x,
+    maxX: vr.x + vr.width,
+    minY: vr.y,
+    maxY: vr.y + vr.height,
+  });
 }
 
 // Drag & drop from EntityPicker
@@ -425,8 +500,99 @@ function onDrop(e: DragEvent) {
           stroke-width="1.5"
           stroke-dasharray="4 2"
         />
+
+        <!-- Viewport Simulator Frame (Phone / Tablet / TV / Ultrawide) -->
+        <g v-if="viewportRect && editorStore.showViewportGuides" class="viewport-guide-layer">
+          <!-- Darkened backdrop with cut-out mask -->
+          <mask id="viewport-mask">
+            <rect x="-10000" y="-10000" width="30000" height="30000" fill="white" />
+            <rect
+              :x="viewportRect.x"
+              :y="viewportRect.y"
+              :width="viewportRect.width"
+              :height="viewportRect.height"
+              rx="8"
+              fill="black"
+            />
+          </mask>
+          <!-- Shaded overlay outside viewport safe zone -->
+          <rect
+            x="-10000"
+            y="-10000"
+            width="30000"
+            height="30000"
+            fill="rgba(0, 0, 0, 0.45)"
+            mask="url(#viewport-mask)"
+            pointer-events="none"
+          />
+
+          <!-- Viewport boundary frame -->
+          <rect
+            :x="viewportRect.x"
+            :y="viewportRect.y"
+            :width="viewportRect.width"
+            :height="viewportRect.height"
+            rx="8"
+            fill="none"
+            stroke="#6366f1"
+            stroke-width="2.5"
+            stroke-dasharray="8 4"
+            class="viewport-border-rect"
+            pointer-events="none"
+          />
+
+          <!-- Device Aspect Label Tag at top-left of frame -->
+          <g :transform="`translate(${viewportRect.x}, ${viewportRect.y - 28})`" pointer-events="none">
+            <rect
+              x="0"
+              y="0"
+              :width="Math.max(viewportRect.label.length * 8 + 60, 170)"
+              height="24"
+              rx="4"
+              fill="rgba(30, 41, 59, 0.94)"
+              stroke="#6366f1"
+              stroke-width="1.2"
+            />
+            <text
+              x="8"
+              y="16"
+              fill="#ffffff"
+              font-size="11"
+              font-weight="bold"
+            >
+              {{ activeViewportConfig?.icon }} {{ viewportRect.label }} ({{ viewportRect.aspect }})
+            </text>
+          </g>
+
+          <!-- Device Dimension Tag at bottom-right of frame -->
+          <g :transform="`translate(${viewportRect.x + viewportRect.width}, ${viewportRect.y + viewportRect.height + 6})`" pointer-events="none">
+            <text
+              x="0"
+              y="14"
+              text-anchor="end"
+              fill="#94a3b8"
+              font-size="11"
+              font-family="monospace"
+              font-weight="600"
+            >
+              Target: {{ viewportRect.rawWidth }} × {{ viewportRect.rawHeight }}px
+            </text>
+          </g>
+        </g>
       </g>
     </svg>
+
+    <!-- Viewport Floating Banner -->
+    <div v-if="viewportRect" class="viewport-preview-pill glass-panel">
+      <span class="vp-pill-icon">{{ activeViewportConfig?.icon }}</span>
+      <span class="vp-pill-text">Simulating Viewport: <strong>{{ activeViewportConfig?.label }}</strong></span>
+      <button class="vp-pill-btn" @click="fitViewToActiveViewport" title="Auto-zoom to fit this simulated viewport">
+        ⛶ Fit View
+      </button>
+      <button class="vp-pill-btn close" @click="editorStore.setViewport('freeform')" title="Exit Viewport Simulation">
+        ✕ Exit
+      </button>
+    </div>
   </div>
 </template>
 
@@ -454,5 +620,78 @@ function onDrop(e: DragEvent) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   pointer-events: none;
+}
+
+.viewport-border-rect {
+  filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4));
+}
+
+/* Floating Viewport Preview Banner */
+.viewport-preview-pill {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  z-index: 150;
+  animation: fadeIn 0.2s ease;
+}
+
+.vp-pill-icon {
+  font-size: 14px;
+}
+
+.vp-pill-text {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.vp-pill-text strong {
+  color: #a5b4fc;
+}
+
+.vp-pill-btn {
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vp-pill-btn:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+.vp-pill-btn.close {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.vp-pill-btn.close:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ffffff;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 </style>

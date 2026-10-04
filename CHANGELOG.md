@@ -5,6 +5,17 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.11] - 2026-10-04
+
+### Added
+- **Word-Style Room & Subsection Grid Overlay Generator**: Added an interactive 8×8 hoverable table matrix picker in the editor toolbar (like inserting a table in Microsoft Word) to instantly generate layouts of rooms or subdivide existing spaces into subsections (e.g. closets, pantries, storage zones). Includes live interactive SVG preview, preset templates (Quad Rooms, Closets/Storage, Suites, Dual Zones), naming prefix customization, and optional interior dividing walls and door openings.
+- **Viewport & Device Aspect Ratio Simulators**: Preview floor plans across common real-world display profiles (Phone Portrait 9:16, Phone Landscape 16:9, Wall Tablet 4:3 / 16:10, Living Room TV 16:9, and Ultrawide 21:9) with safe-area letterboxing, aspect badges, and one-click Fit-to-Screen controls.
+- **Live View & Kiosk TV / Touch Navigation HUD**: Added direct left-click & touch panning, two-finger pinch-to-zoom for mobile/tablets, an on-screen D-pad navigation cluster (▲, ▼, ◀, ▶, +, −, 🎯, ⛶), a position lock toggle (🔒) to pin wall displays in place, and TV remote/keyboard shortcut support (Arrow keys, Home, L, F).
+- **Item Centering & Viewport Fit**: Added a one-click Recenter tool in the editor toolbar that aligns selected endpoints or all floor plan items to the center of the plan bounding box.
+
+### Fixed
+- **Multi-Item Drag**: Fixed an issue where dragging multiple selected endpoints would collapse the selection or fail to move all endpoints together; now smoothly translates all selected items in real time with a single undo history snapshot.
+
 ## [0.3.10] - 2026-10-04
 
 ### Changed

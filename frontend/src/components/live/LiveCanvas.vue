@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useEditorStore } from "@/stores/editorStore";
 import { usePlanStore } from "@/stores/planStore";
 import { useLiveStore } from "@/stores/liveStore";
@@ -18,7 +18,17 @@ const planStore = usePlanStore();
 const liveStore = useLiveStore();
 
 const svgRef = ref<SVGSVGElement | null>(null);
-const { onMouseDown, onMouseMove, onMouseUp, onWheel } = useSvgPanZoom(svgRef);
+const { onWheel } = useSvgPanZoom(svgRef);
+
+// Fixed Position & TV/Phone HUD state
+const isPositionLocked = ref(localStorage.getItem("sh_live_locked") === "true");
+const showNavControls = ref(true);
+const isFullscreen = ref(Boolean(document.fullscreenElement));
+
+// Live Drag & Touch state
+const isLiveDragging = ref(false);
+const liveDragStart = ref({ x: 0, y: 0 });
+const livePanStart = ref({ x: 0, y: 0 });
 
 const selectedCameraEndpoint = ref<Endpoint | null>(null);
 const popupTriggeredBy = ref<string>("");
@@ -192,15 +202,192 @@ function handleDirectionalNav(e: KeyboardEvent, currentEp: Endpoint) {
     el?.focus();
   }
 }
+
+// Live Mouse Drag Panning
+function onLiveMouseDown(e: MouseEvent) {
+  if (isPositionLocked.value) return;
+  if (e.button === 0 || e.button === 1) {
+    isLiveDragging.value = true;
+    liveDragStart.value = { x: e.clientX, y: e.clientY };
+    livePanStart.value = { x: editorStore.panX, y: editorStore.panY };
+  }
+}
+
+function onLiveMouseMove(e: MouseEvent) {
+  if (isPositionLocked.value || !isLiveDragging.value) return;
+  const dx = e.clientX - liveDragStart.value.x;
+  const dy = e.clientY - liveDragStart.value.y;
+  editorStore.panX = livePanStart.value.x + dx;
+  editorStore.panY = livePanStart.value.y + dy;
+}
+
+function onLiveMouseUp() {
+  isLiveDragging.value = false;
+}
+
+function onLiveWheel(e: WheelEvent) {
+  if (isPositionLocked.value) return;
+  onWheel(e);
+}
+
+// Live Touch Pan & Pinch-Zoom (Phone / Tablet / Wall-Mount)
+let initialPinchDistance = 0;
+let initialPinchZoom = 1;
+
+function onTouchStart(e: TouchEvent) {
+  if (isPositionLocked.value) return;
+
+  if (e.touches.length === 1) {
+    isLiveDragging.value = true;
+    const t = e.touches[0];
+    liveDragStart.value = { x: t.clientX, y: t.clientY };
+    livePanStart.value = { x: editorStore.panX, y: editorStore.panY };
+  } else if (e.touches.length === 2) {
+    isLiveDragging.value = false;
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    initialPinchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    initialPinchZoom = editorStore.zoom;
+  }
+}
+
+function onTouchMove(e: TouchEvent) {
+  if (isPositionLocked.value) return;
+
+  if (e.touches.length === 1 && isLiveDragging.value) {
+    const t = e.touches[0];
+    const dx = t.clientX - liveDragStart.value.x;
+    const dy = t.clientY - liveDragStart.value.y;
+    editorStore.panX = livePanStart.value.x + dx;
+    editorStore.panY = livePanStart.value.y + dy;
+  } else if (e.touches.length === 2 && initialPinchDistance > 0) {
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    const factor = dist / initialPinchDistance;
+    editorStore.zoom = Math.min(Math.max(initialPinchZoom * factor, 0.2), 6.0);
+  }
+}
+
+function onTouchEnd() {
+  isLiveDragging.value = false;
+  initialPinchDistance = 0;
+}
+
+// Navigation Actions for TVs and Phones
+function panCanvas(dx: number, dy: number) {
+  editorStore.panX += dx;
+  editorStore.panY += dy;
+}
+
+function zoomIn() {
+  editorStore.zoomIn();
+}
+
+function zoomOut() {
+  editorStore.zoomOut();
+}
+
+function fitToScreen() {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  const bg = planStore.currentFloor?.background;
+  if (bg && bg.width > 0 && bg.height > 0) {
+    minX = Math.min(minX, bg.x);
+    maxX = Math.max(maxX, bg.x + bg.width);
+    minY = Math.min(minY, bg.y);
+    maxY = Math.max(maxY, bg.y + bg.height);
+  }
+
+  for (const ep of planStore.currentEndpoints) {
+    minX = Math.min(minX, ep.x - 30);
+    maxX = Math.max(maxX, ep.x + 30);
+    minY = Math.min(minY, ep.y - 30);
+    maxY = Math.max(maxY, ep.y + 30);
+  }
+
+  const containerW = window.innerWidth;
+  const containerH = window.innerHeight;
+
+  editorStore.fitToView(containerW, containerH, {
+    minX: minX === Infinity ? 0 : minX,
+    maxX: maxX === -Infinity ? 1200 : maxX,
+    minY: minY === Infinity ? 0 : minY,
+    maxY: maxY === -Infinity ? 800 : maxY,
+  });
+}
+
+function togglePositionLock() {
+  isPositionLocked.value = !isPositionLocked.value;
+  localStorage.setItem("sh_live_locked", String(isPositionLocked.value));
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function onGlobalKeyDown(e: KeyboardEvent) {
+  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    panCanvas(0, 100);
+  } else if (e.key === "ArrowDown") {
+    e.preventDefault();
+    panCanvas(0, -100);
+  } else if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    panCanvas(100, 0);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    panCanvas(-100, 0);
+  } else if (e.key === "+" || e.key === "=") {
+    zoomIn();
+  } else if (e.key === "-" || e.key === "_") {
+    zoomOut();
+  } else if (e.key === "0" || e.key === "Home") {
+    fitToScreen();
+  } else if (e.key.toLowerCase() === "l") {
+    togglePositionLock();
+  } else if (e.key.toLowerCase() === "f") {
+    toggleFullscreen();
+  }
+}
+
+function updateFullscreenState() {
+  isFullscreen.value = Boolean(document.fullscreenElement);
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", onGlobalKeyDown);
+  document.addEventListener("fullscreenchange", updateFullscreenState);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", onGlobalKeyDown);
+  document.removeEventListener("fullscreenchange", updateFullscreenState);
+});
 </script>
 
 <template>
   <div
     class="canvas-container live-container"
-    @wheel="onWheel"
-    @mousedown="onMouseDown"
-    @mousemove="onMouseMove"
-    @mouseup="onMouseUp"
+    :class="{ 'position-locked': isPositionLocked }"
+    @wheel="onLiveWheel"
+    @mousedown="onLiveMouseDown"
+    @mousemove="onLiveMouseMove"
+    @mouseup="onLiveMouseUp"
+    @touchstart="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
   >
     <!-- Live Floating Control Bar -->
     <div class="live-floating-bar glass-panel">
@@ -230,6 +417,23 @@ function handleDirectionalNav(e: KeyboardEvent, currentEp: Endpoint) {
         @click="liveStore.clearMotionTrails"
       >
         <span>Clear Trail</span>
+      </button>
+
+      <button
+        class="live-control-btn lock-btn"
+        :class="{ active: isPositionLocked }"
+        :title="isPositionLocked ? 'Position is fixed/locked (tablet/TV mode)' : 'Position is free to pan & zoom'"
+        @click="togglePositionLock"
+      >
+        <span v-if="isPositionLocked">🔒 Fixed Position</span>
+        <span v-else>🔓 Free Pan</span>
+      </button>
+
+      <button class="live-control-btn" title="Fit floor plan to screen" @click="fitToScreen">
+        <svg viewBox="0 0 24 24" width="14" height="14">
+          <path fill="currentColor" d="M5 5h5V3H3v7h2V5zm14-2h-7v2h5v5h2V3zm0 14h-2v5h-5v2h7v-7zM5 14H3v7h7v-2H5v-5z"/>
+        </svg>
+        <span>Fit Screen</span>
       </button>
 
       <button class="live-control-btn" title="Reset View Zoom" @click="editorStore.resetView">
@@ -430,6 +634,66 @@ function handleDirectionalNav(e: KeyboardEvent, currentEp: Endpoint) {
       :triggered-by="popupTriggeredBy"
       @close="closeCameraModal"
     />
+
+    <!-- TV & Phone Navigation Controls HUD -->
+    <div class="live-nav-hud" :class="{ collapsed: !showNavControls }">
+      <button
+        class="nav-toggle-btn glass-panel"
+        @click="showNavControls = !showNavControls"
+        :title="showNavControls ? 'Hide Page Controls' : 'Show TV & Phone Navigation Controls'"
+      >
+        <span class="hud-toggle-icon">{{ showNavControls ? '▼' : '🎮' }}</span>
+        <span class="hud-toggle-label">{{ showNavControls ? 'Hide' : 'Controls' }}</span>
+      </button>
+
+      <div v-if="showNavControls" class="nav-hud-body glass-panel">
+        <!-- Directional D-Pad (Up, Down, Left, Right, Center) -->
+        <div class="dpad-container">
+          <button class="dpad-btn up" @click="panCanvas(0, 120)" title="Pan Up (▲)">
+            ▲
+          </button>
+          <div class="dpad-row">
+            <button class="dpad-btn left" @click="panCanvas(120, 0)" title="Pan Left (◀)">
+              ◀
+            </button>
+            <button class="dpad-btn center" @click="fitToScreen" title="Center & Fit (🎯)">
+              🎯
+            </button>
+            <button class="dpad-btn right" @click="panCanvas(-120, 0)" title="Pan Right (▶)">
+              ▶
+            </button>
+          </div>
+          <button class="dpad-btn down" @click="panCanvas(0, -120)" title="Pan Down (▼)">
+            ▼
+          </button>
+        </div>
+
+        <!-- Secondary Action Column: Zoom, Lock & Fullscreen -->
+        <div class="nav-hud-actions">
+          <button class="hud-action-btn" @click="zoomIn" title="Zoom In (+)">
+            <span>+</span>
+          </button>
+          <button class="hud-action-btn" @click="zoomOut" title="Zoom Out (−)">
+            <span>−</span>
+          </button>
+          <button
+            class="hud-action-btn"
+            :class="{ locked: isPositionLocked }"
+            @click="togglePositionLock"
+            :title="isPositionLocked ? 'Unlock canvas pan/zoom' : 'Lock position (ideal for wall tablets & TVs)'"
+          >
+            <span>{{ isPositionLocked ? '🔒' : '🔓' }}</span>
+          </button>
+          <button
+            class="hud-action-btn"
+            @click="toggleFullscreen"
+            title="Toggle Fullscreen Mode (⛶)"
+          >
+            <span>{{ isFullscreen ? '⤓' : '⛶' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -710,5 +974,183 @@ function handleDirectionalNav(e: KeyboardEvent, currentEp: Endpoint) {
 
 .overview-building-marker:hover .building-box {
   filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.5));
+}
+
+/* Position Lock Visual State */
+.live-container.position-locked {
+  cursor: default !important;
+}
+
+.lock-btn.active {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+/* TV & Phone Navigation HUD */
+.live-nav-hud {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 120;
+  user-select: none;
+}
+
+.nav-toggle-btn {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.nav-toggle-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: #ffffff;
+  border-color: #6366f1;
+}
+
+.nav-hud-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  animation: fadeIn 0.2s ease;
+}
+
+/* Directional D-Pad */
+.dpad-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.dpad-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dpad-btn {
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary, #ffffff);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dpad-btn:hover {
+  background: rgba(99, 102, 241, 0.35);
+  border-color: #6366f1;
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.dpad-btn:active {
+  transform: scale(0.95);
+  background: #6366f1;
+}
+
+.dpad-btn.center {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  font-size: 14px;
+}
+
+/* Secondary Actions (Zoom, Lock, Fullscreen) */
+.nav-hud-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-action-btn {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hud-action-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.hud-action-btn.locked {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+/* Responsive Overlays for Phones & Tablets */
+@media (max-width: 768px) {
+  .live-floating-bar {
+    top: 10px;
+    padding: 4px 8px;
+    gap: 4px;
+    flex-wrap: wrap;
+    max-width: 95vw;
+  }
+
+  .live-control-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .live-nav-hud {
+    bottom: 16px;
+    right: 16px;
+  }
+
+  .dpad-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .hud-action-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .overview-rollups-overlay {
+    top: auto;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
 }
 </style>

@@ -111,7 +111,7 @@ onUnmounted(() => {
 .kiosk-status-pill {
   position: absolute;
   bottom: 24px;
-  right: 24px;
+  left: 24px;
   display: flex;
   align-items: center;
   gap: 10px;

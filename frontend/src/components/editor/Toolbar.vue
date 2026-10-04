@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore, VIEWPORT_CONFIGS, type ViewportPreset } from "@/stores/editorStore";
 import { usePlanStore } from "@/stores/planStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { api } from "@/services/api";
 import VersionHistoryModal from "@/components/editor/VersionHistoryModal.vue";
 import ExportPlanModal from "@/components/editor/ExportPlanModal.vue";
+import RoomGridModal from "@/components/editor/RoomGridModal.vue";
 
 const editorStore = useEditorStore();
 const planStore = usePlanStore();
@@ -17,6 +18,54 @@ const isUploading = ref(false);
 const isImporting = ref(false);
 const showVersionModal = ref(false);
 const showExportModal = ref(false);
+const showRoomGridModal = ref(false);
+const showViewportMenu = ref(false);
+
+function selectViewportPreset(preset: ViewportPreset) {
+  editorStore.setViewport(preset);
+  showViewportMenu.value = false;
+}
+
+function handleRecenterItems() {
+  const selectedIds = editorStore.selectedEndpointIds;
+  if (selectedIds.length > 0) {
+    planStore.recenterEndpoints(selectedIds);
+  } else {
+    planStore.recenterEndpoints();
+  }
+}
+
+function handleFitView() {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  const bg = planStore.currentFloor?.background;
+  if (bg && bg.width > 0 && bg.height > 0) {
+    minX = Math.min(minX, bg.x);
+    maxX = Math.max(maxX, bg.x + bg.width);
+    minY = Math.min(minY, bg.y);
+    maxY = Math.max(maxY, bg.y + bg.height);
+  }
+
+  for (const ep of planStore.currentEndpoints) {
+    minX = Math.min(minX, ep.x - 20);
+    maxX = Math.max(maxX, ep.x + 20);
+    minY = Math.min(minY, ep.y - 20);
+    maxY = Math.max(maxY, ep.y + 20);
+  }
+
+  const containerW = window.innerWidth - 380;
+  const containerH = window.innerHeight - 80;
+
+  editorStore.fitToView(containerW, containerH, {
+    minX: minX === Infinity ? 0 : minX,
+    maxX: maxX === -Infinity ? 1200 : maxX,
+    minY: minY === Infinity ? 0 : minY,
+    maxY: maxY === -Infinity ? 800 : maxY,
+  });
+}
 
 function triggerUpload() {
   fileInputRef.value?.click();
@@ -221,6 +270,16 @@ onUnmounted(() => {
 
       <button
         class="tool-btn"
+        title="Insert Room & Subsection Grid (Table matrix picker for rooms / closets)"
+        @click="showRoomGridModal = true"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M3 3v18h18V3H3zm8 8H5V5h6v6zm2-6h6v6h-6V5zm-2 8v6H5v-6h6zm2 6v-6h6v6h-6z"/>
+        </svg>
+      </button>
+
+      <button
+        class="tool-btn"
         :class="{ active: editorStore.activeTool === 'door' }"
         title="Door Cutout (D) - Click existing wall to place door"
         @click="editorStore.setTool('door')"
@@ -292,7 +351,7 @@ onUnmounted(() => {
 
     <div class="divider"></div>
 
-    <!-- Zoom controls -->
+    <!-- Zoom & Fit controls -->
     <div class="tool-group">
       <button class="tool-btn" title="Zoom In" @click="editorStore.zoomIn">
         <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -301,9 +360,64 @@ onUnmounted(() => {
       <button class="tool-btn" title="Zoom Out" @click="editorStore.zoomOut">
         <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 13H5v-2h14v2z"/></svg>
       </button>
-      <button class="tool-btn" title="Reset View" @click="editorStore.resetView">
+      <button class="tool-btn" title="Reset View Zoom" @click="editorStore.resetView">
         <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
       </button>
+      <button class="tool-btn" title="Fit View to Screen" @click="handleFitView">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M5 5h5V3H3v7h2V5zm14-2h-7v2h5v5h2V3zm0 14h-2v5h-5v2h7v-7zM5 14H3v7h7v-2H5v-5z"/></svg>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Recenter Items -->
+    <div class="tool-group">
+      <button
+        class="tool-btn action recenter-btn"
+        :title="editorStore.selectedEndpointIds.length > 0 ? 'Recenter selected items on floor plan' : 'Recenter all items on floor plan'"
+        @click="handleRecenterItems"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15">
+          <path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm0-13a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm0 8a3 3 0 1 1 3-3 3 3 0 0 1-3 3z"/>
+        </svg>
+        <span>{{ editorStore.selectedEndpointIds.length > 0 ? `Recenter (${editorStore.selectedEndpointIds.length})` : 'Recenter' }}</span>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Viewport Aspect Simulator -->
+    <div class="tool-group relative-container">
+      <button
+        class="tool-btn action viewport-btn"
+        :class="{ active: editorStore.activeViewport !== 'freeform' }"
+        title="Simulate different screen aspect ratios (Phone, Tablet, TV)"
+        @click="showViewportMenu = !showViewportMenu"
+      >
+        <span>{{ VIEWPORT_CONFIGS[editorStore.activeViewport]?.icon }}</span>
+        <span>{{ VIEWPORT_CONFIGS[editorStore.activeViewport]?.aspectRatio || 'Aspect' }}</span>
+        <svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+      </button>
+
+      <!-- Viewport Presets Dropdown Menu -->
+      <div v-if="showViewportMenu" class="viewport-menu glass-panel" @click.stop>
+        <div class="menu-header">Preview Screen Aspect</div>
+        <button
+          v-for="vp in Object.values(VIEWPORT_CONFIGS)"
+          :key="vp.id"
+          class="viewport-menu-item"
+          :class="{ active: editorStore.activeViewport === vp.id }"
+          @click="selectViewportPreset(vp.id)"
+        >
+          <span class="vp-icon">{{ vp.icon }}</span>
+          <div class="vp-meta">
+            <span class="vp-name">{{ vp.label }}</span>
+            <span class="vp-aspect" v-if="vp.width > 0">{{ vp.width }}×{{ vp.height }}px ({{ vp.aspectRatio }})</span>
+            <span class="vp-aspect" v-else>Freeform / Full Canvas</span>
+          </div>
+          <span v-if="editorStore.activeViewport === vp.id" class="vp-check">✓</span>
+        </button>
+      </div>
     </div>
 
     <div class="divider"></div>
@@ -364,6 +478,12 @@ onUnmounted(() => {
       v-if="showVersionModal && planStore.currentPlanId"
       :plan-id="planStore.currentPlanId"
       @close="showVersionModal = false"
+    />
+
+    <!-- Room Grid Generator Modal -->
+    <RoomGridModal
+      v-if="showRoomGridModal"
+      @close="showRoomGridModal = false"
     />
   </div>
 </template>
@@ -447,5 +567,112 @@ onUnmounted(() => {
 
 .status-saved {
   color: var(--color-success);
+}
+
+.relative-container {
+  position: relative;
+}
+
+.viewport-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.viewport-btn.active {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
+.recenter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recenter-btn:hover {
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+
+/* Viewport Dropdown Menu */
+.viewport-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md, 8px);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
+}
+
+.menu-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #94a3b8);
+  padding: 6px 8px 4px;
+}
+
+.viewport-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #cbd5e1);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.viewport-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.viewport-menu-item.active {
+  background: rgba(99, 102, 241, 0.25);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.vp-icon {
+  font-size: 15px;
+}
+
+.vp-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.vp-name {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.vp-aspect {
+  font-size: 10px;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 1px;
+}
+
+.vp-check {
+  color: #818cf8;
+  font-weight: bold;
 }
 </style>
