@@ -1,0 +1,26 @@
+---
+configuration:
+  kiosk_enabled:
+    name: "Enable Direct Kiosk Mode"
+    description: >-
+      Exposes a dedicated direct web port bypassing Home Assistant authentication
+      for dedicated wall displays, smart TVs, and kiosks using an access token.
+  kiosk_port:
+    name: "Kiosk Port"
+    description: >-
+      The network port where the direct kiosk interface will be hosted.
+  kiosk_token:
+    name: "Kiosk Security Token"
+    description: >-
+      Secret authentication token for direct kiosk access. If left empty,
+      a cryptographically secure token will be generated on startup and logged.
+  default_view:
+    name: "Default View"
+    description: >-
+      Initial landing view when opening Security Hawk ('overview' for the 3D multi-floor site overview or 'floor' for the first floor plan).
+  quiet_return_seconds:
+    name: "Quiet Return Inactivity Seconds"
+    description: >-
+      Number of seconds of inactivity after an alert before the display automatically returns to the quiet/overview view.
+network:
+  8100/tcp: "Direct Kiosk Port (8100/tcp)"

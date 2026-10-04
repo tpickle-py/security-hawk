@@ -1,0 +1,46 @@
+---
+name: "Security Hawk"
+version: "0.3.3"
+slug: "security_hawk"
+description: "Interactive floor plan viewer with live sensor states, video streaming, and kiosk mode"
+url: "https://github.com/tpickle-py/security-hawk"
+
+arch:
+  - amd64
+  - aarch64
+
+startup: application
+boot: auto
+init: false
+
+# Ingress (editor UI behind HA authentication)
+ingress: true
+ingress_port: 8099
+
+# Direct kiosk port (Route B: direct TV/wall display access)
+ports:
+  8100/tcp: null
+ports_description:
+  8100/tcp: "Kiosk page (direct access for TV/wall display)"
+
+# Home Assistant Supervisor API access
+hassio_api: true
+homeassistant_api: true
+hassio_role: default
+
+# Options
+options:
+  kiosk_enabled: false
+  kiosk_port: 8100
+  kiosk_token: ""
+  default_view: "overview"
+  quiet_return_seconds: 120
+
+schema:
+  kiosk_enabled: bool
+  kiosk_port: port
+  kiosk_token: str
+  default_view: "list(overview|floor)"
+  quiet_return_seconds: int
+
+image: "ghcr.io/tpickle-py/security-hawk/{arch}"
