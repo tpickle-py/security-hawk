@@ -5,6 +5,62 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-10-04
+
+### Added
+- **Camera Point of View & Depth of View in Editor**: Render live Field of View (FOV) cones directly on the canvas in Design mode, featuring a dashed aiming ray and directional arrowhead indicating aim and rotation angle. Increased depth slider range up to 500px in the properties panel.
+- **Entity Hide / Ignore in Entity Picker**: Added a one-click "Hide" button on entity cards so irrelevant entities (diagnostics, non-security smart devices) can be hidden. Added a dedicated "Hidden" tab with count badge to review and unhide entities, with state persisted across sessions.
+- **Window vs. Door Sensor Detection**: Added distinct entity classification and icons for windows (🪟) vs. doors (🚪) with support for contact sensors (e.g. Sonoff SNZB-04, Aqara). Added category filter chips (`All`, `Cameras`, `Motion`, `Doors`, `Windows`) to the entity picker.
+- **Editable Entity ID**: Allowed direct editing of the Entity ID field in the Property Panel so typos and renamed entities can be fixed without deleting and recreating endpoints.
+
+### Fixed
+- **False "Entity Not Found in HA" Warning**: Added `/api/entities/ids/` endpoint to load all registered Home Assistant entity IDs into the frontend store and cross-reference active WebSocket states, preventing valid placed entities outside the initial search window from being falsely flagged as missing.
+
+## [0.3.8] - 2026-10-04
+
+### Fixed
+- **Frontend Assets 404**: Configure `asset_view` in `urls.py` to serve Vite JS/CSS/font bundles from `static/frontend/assets` before checking user-uploaded plan assets.
+- **WebSocket Reconnect Tight-Loop**: Ensure `HAWebSocketClient._running` is `True` and run `_connect_loop()` in the background listener thread with backoff delays, preventing rapid reconnect loops and redundant registry refreshes.
+
+## [0.3.7] - 2026-10-04
+
+### Changed
+- **Multi-Arch Docker Build Performance**: Set `FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-build` in `Dockerfile` so frontend assets bundle natively on the runner's architecture, speeding up `aarch64` container builds from ~12 minutes down to ~1 minute.
+
+## [0.3.6] - 2026-10-04
+
+### Fixed
+- **Supervisor Role & Auth API**: Set `hassio_role: homeassistant` and `auth_api: true` in `config.yaml` to ensure the injected `SUPERVISOR_TOKEN` has proper API authorization scopes.
+- **s6-overlay Environment with `with-contenv`**: Set `run.sh` shebang to `#!/usr/bin/with-contenv bashio` so container environment variables (`SUPERVISOR_TOKEN`) are automatically loaded into all child processes.
+
+## [0.3.5] - 2026-10-04
+
+### Fixed
+- **Ingress 403 Forbidden**: Support `X-Ingress-Path` and local subnets in `IngressMiddleware` when client IP headers (`X-Forwarded-For`) are forwarded by Daphne.
+- **Supervisor API & Token Handling**: Automatically import environment variables saved by `s6-overlay` in `/var/run/s6/container_environment/` so `SUPERVISOR_TOKEN` is available to `bashio` and the Django background listener.
+- **Direct Options Loading**: Read `/data/options.json` directly with `jq` in `run.sh` to avoid redundant Supervisor API roundtrips during container boot.
+
+## [0.3.4] - 2026-10-04
+
+### Changed
+- Fix s6-overlay container supervision conflicts in Home Assistant by setting init: false
+- Add hassio_api: true and hassio_role: default for Supervisor API token injection
+- Safe fallback defaults in run.sh and settings.py for KIOSK_PORT, QUIET_RETURN_SECONDS, and SUPERVISOR_TOKEN
+- Fix async event loop handling in synchronous camera snapshot fallback view
+- Automated semantic version release script (scripts/bump_version.py)
+
+## [0.3.3] - 2026-10-04
+
+### Fixed
+- Add `hassio_api: true` and `hassio_role: default` to grant Supervisor API access for option retrieval and `SUPERVISOR_TOKEN` injection.
+- Safeguard `SUPERVISOR_TOKEN` in `run.sh` with default expansion to prevent bash `set -u` unbound variable exits.
+
+## [0.3.2] - 2026-10-03
+
+### Fixed
+- Add `init: false` to add-on configuration preventing s6-overlay PID 1 supervision conflicts in Home Assistant.
+- Automated release build and cross-repository dispatch workflow for Home Assistant Add-ons repository.
+
 ## [0.3.0] - 2026-10-03
 
 ### Added

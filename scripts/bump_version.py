@@ -7,8 +7,10 @@ version across:
   - security_hawk/config.yaml (app add-on manifest)
   - frontend/package.json
   - Dockerfile (io.hass.version label)
-  - CHANGELOG.md
+  - CHANGELOG.md (root)
+  - security_hawk/CHANGELOG.md (app add-on mirror for repository-updater)
   - ../ha-addons/security_hawk/config.yaml (HA catalog repo, if present)
+  - ../ha-addons/security_hawk/CHANGELOG.md (HA catalog repo, if present)
 """
 
 import argparse
@@ -39,7 +41,13 @@ def update_file(path: Path, pattern: str, replacement: str, dry_run: bool = Fals
     return False
 
 
-def update_changelog(repo_root: Path, new_ver: str, changelog_entry: str | None, dry_run: bool = False):
+def update_changelog(
+    repo_root: Path,
+    ha_addons_root: Path,
+    new_ver: str,
+    changelog_entry: str | None,
+    dry_run: bool = False,
+):
     changelog_path = repo_root / "CHANGELOG.md"
     if not changelog_path.is_file():
         return
@@ -48,26 +56,38 @@ def update_changelog(repo_root: Path, new_ver: str, changelog_entry: str | None,
     header_check = f"## [{new_ver}]"
     if header_check in content:
         print(f"  [SKIPPED] {changelog_path} already contains {header_check}")
-        return
-
-    today = datetime.date.today().isoformat()
-    entry_body = changelog_entry.strip() if changelog_entry else f"- Release version {new_ver}"
-
-    new_section = (
-        f"## [{new_ver}] - {today}\n\n"
-        f"### Changed\n"
-        f"{entry_body}\n\n"
-    )
-
-    m = re.search(r"^(##\s+\[\d+\.\d+\.\d+\])", content, re.MULTILINE)
-    if m:
-        idx = m.start()
-        updated_content = content[:idx] + new_section + content[idx:]
-        if not dry_run:
-            changelog_path.write_text(updated_content, encoding="utf-8")
-        print(f"  [UPDATED] {changelog_path} with new section for {new_ver}")
     else:
-        print(f"  [WARN] Could not find insertion point in {changelog_path}")
+        today = datetime.date.today().isoformat()
+        entry_body = changelog_entry.strip() if changelog_entry else f"- Release version {new_ver}"
+
+        new_section = (
+            f"## [{new_ver}] - {today}\n\n"
+            f"### Changed\n"
+            f"{entry_body}\n\n"
+        )
+
+        m = re.search(r"^(##\s+\[\d+\.\d+\.\d+\])", content, re.MULTILINE)
+        if m:
+            idx = m.start()
+            content = content[:idx] + new_section + content[idx:]
+            if not dry_run:
+                changelog_path.write_text(content, encoding="utf-8")
+            print(f"  [UPDATED] {changelog_path} with new section for {new_ver}")
+        else:
+            print(f"  [WARN] Could not find insertion point in {changelog_path}")
+
+    # Synchronize CHANGELOG.md to security_hawk/ (consumed by repository-updater)
+    app_changelog = repo_root / "security_hawk" / "CHANGELOG.md"
+    if not dry_run:
+        app_changelog.write_text(content, encoding="utf-8")
+    print(f"  [SYNCED] {app_changelog}")
+
+    # Synchronize CHANGELOG.md to ../ha-addons/security_hawk/ (if present)
+    ha_addon_changelog = ha_addons_root / "security_hawk" / "CHANGELOG.md"
+    if ha_addon_changelog.parent.is_dir():
+        if not dry_run:
+            ha_addon_changelog.write_text(content, encoding="utf-8")
+        print(f"  [SYNCED] {ha_addon_changelog}")
 
 
 def main():
@@ -151,8 +171,8 @@ def main():
         args.dry_run,
     )
 
-    # 5. CHANGELOG.md
-    update_changelog(repo_root, new_ver, args.message, args.dry_run)
+    # 5. CHANGELOG.md (root, security_hawk/, and ../ha-addons/)
+    update_changelog(repo_root, ha_addons_root, new_ver, args.message, args.dry_run)
 
     # 6. ha-addons/security_hawk/config.yaml (if present)
     ha_addon_config = ha_addons_root / "security_hawk" / "config.yaml"

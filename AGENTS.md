@@ -114,7 +114,9 @@ python3 scripts/bump_version.py patch --dry-run
    - `frontend/package.json`
    - `Dockerfile` (`io.hass.version` label)
    - `CHANGELOG.md` (prepends new version heading with timestamp)
+   - `security_hawk/CHANGELOG.md` (app mirror consumed by repository-updater)
    - `../ha-addons/security_hawk/config.yaml` (if present in adjacent directory)
+   - `../ha-addons/security_hawk/CHANGELOG.md` (if present in adjacent directory)
 
 ### Publishing a Release:
 ```bash
@@ -128,7 +130,7 @@ git push origin master && git push origin vX.Y.Z
 
 # 3. If ../ha-addons was modified:
 cd ../ha-addons
-git add security_hawk/config.yaml
+git add security_hawk/config.yaml security_hawk/CHANGELOG.md
 git commit -m "chore: bump security_hawk to X.Y.Z"
 git push origin main
 ```
@@ -166,4 +168,4 @@ git push origin main
 6. **`security_hawk/` Subdirectory Mirror**:
    - `hassio-addons/repository-updater` looks for files inside the directory specified by `target:` in `ha-addons/.addons.yml` (`target: security_hawk`).
    - If files are only in the repository root and `security_hawk/` is absent, the updater fails with `An error occurred while loading the remote app configuration file`.
-   - Always ensure changes to `config.yaml` or `DOCS.md` are reflected in `security_hawk/`.
+   - Always ensure changes to `config.yaml`, `CHANGELOG.md`, or `DOCS.md` are reflected in `security_hawk/`.
