@@ -5,6 +5,11 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-10-04
+
+### Changed
+- **Multi-Arch Docker Build Performance**: Set `FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-build` in `Dockerfile` so frontend assets bundle natively on the runner's architecture, speeding up `aarch64` container builds from ~12 minutes down to ~1 minute.
+
 ## [0.3.6] - 2026-10-04
 
 ### Fixed
