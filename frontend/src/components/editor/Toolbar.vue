@@ -5,6 +5,7 @@ import { usePlanStore } from "@/stores/planStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { api } from "@/services/api";
 import VersionHistoryModal from "@/components/editor/VersionHistoryModal.vue";
+import ExportPlanModal from "@/components/editor/ExportPlanModal.vue";
 
 const editorStore = useEditorStore();
 const planStore = usePlanStore();
@@ -15,6 +16,7 @@ const importFileInputRef = ref<HTMLInputElement | null>(null);
 const isUploading = ref(false);
 const isImporting = ref(false);
 const showVersionModal = ref(false);
+const showExportModal = ref(false);
 
 function triggerUpload() {
   fileInputRef.value?.click();
@@ -25,9 +27,7 @@ function triggerImport() {
 }
 
 function handleExportPlan() {
-  if (!planStore.currentPlanId) return;
-  const url = api.getExportUrl(planStore.currentPlanId);
-  window.open(url, "_blank");
+  showExportModal.value = true;
 }
 
 async function handleImportFileChange(e: Event) {
@@ -310,14 +310,14 @@ onUnmounted(() => {
 
     <!-- Export / Import / Background upload -->
     <div class="tool-group">
-      <button class="tool-btn action" title="Export Plan JSON (Backup/Testing)" @click="handleExportPlan">
+      <button class="tool-btn action" title="Export Floor Plan (.zip Bundle or .json)" @click="handleExportPlan">
         <svg viewBox="0 0 24 24" width="16" height="16">
           <path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
         </svg>
         <span>Export</span>
       </button>
 
-      <button class="tool-btn action" :disabled="isImporting" title="Import Plan JSON (with Auto-Migration)" @click="triggerImport">
+      <button class="tool-btn action" :disabled="isImporting" title="Import Plan .zip Bundle or .json" @click="triggerImport">
         <svg viewBox="0 0 24 24" width="16" height="16">
           <path fill="currentColor" d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
         </svg>
@@ -326,7 +326,7 @@ onUnmounted(() => {
       <input
         ref="importFileInputRef"
         type="file"
-        accept=".json,application/json"
+        accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
         style="display: none;"
         @change="handleImportFileChange"
       />
@@ -351,6 +351,13 @@ onUnmounted(() => {
       <span v-if="planStore.isSaving" class="status-saving">Saving...</span>
       <span v-else-if="planStore.lastSavedAt" class="status-saved">Saved</span>
     </div>
+
+    <!-- Export Plan Modal -->
+    <ExportPlanModal
+      v-if="showExportModal && planStore.currentPlanId"
+      :plan-id="planStore.currentPlanId"
+      @close="showExportModal = false"
+    />
 
     <!-- Version History Modal -->
     <VersionHistoryModal

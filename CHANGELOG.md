@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Numbered checkpoint sequence badges (`#1`, `#2`, `#3`) with elapsed duration badges (`+0s`, `+5s`, `+14s`).
   - Occupant lead pulse radar animation tracking current front-line movement.
   - Live toolbar controls with toggle button (`〰️ Motion Trails`) and manual trail clearing.
+- **Live Video Streaming Mode**:
+  - MJPEG real-time video stream proxying directly from Home Assistant Core (`/camera_proxy_stream/{entity_id}`) into the linked camera popup window (`/api/camera/<entity_id>/stream/`).
+  - Modal toggle switch between `📸 Snapshot (2.5s)` and `🔴 Live Video Stream` mode with automatic fallback.
+- **Floor Plan Bundle (.zip) Export & Import (Spec §Import and export)**:
+  - Complete portable archive packaging containing `plan.json` along with all custom floor plan background blueprint images under `assets/`.
+  - Export warning notice dialog notifying users of physical security implications: *"A shared plan bundle contains the layout of a building and where its sensors are. Share with caution."*
+  - Smart universal import engine supporting both `.json` and `.zip` archives with automatic ZipSlip path traversal protection and asset directory restoration.
 
 ## [0.2.0] - 2026-10-03
 

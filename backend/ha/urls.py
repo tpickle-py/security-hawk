@@ -15,4 +15,5 @@ urlpatterns = [
     ),
     path("entities/<str:entity_id>/", views.get_entity, name="get_entity"),
     path("camera/<str:entity_id>/", views.camera_snapshot, name="camera_snapshot"),
+    path("camera/<str:entity_id>/stream/", views.camera_stream, name="camera_stream"),
 ]

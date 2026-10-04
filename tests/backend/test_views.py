@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+import urllib.error
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.test import Client, SimpleTestCase, override_settings
 
@@ -149,6 +150,38 @@ class TestKioskMiddleware(SimpleTestCase):
         # Verify 404
         assert self.client.get(f"/api/plans/{plan_id}/").status_code == 404
 
+    def test_camera_stream_invalid_entity(self) -> None:
+        response = self.client.get("/api/camera/binary_sensor.front_door/stream/")
+        assert response.status_code == 400
+        assert response.json()["error"] == "Not a camera entity"
+
+    def test_camera_stream_success(self) -> None:
+        mock_stream = MagicMock()
+        mock_stream.headers = {"Content-Type": "multipart/x-mixed-replace; boundary=--frame"}
+        mock_stream.read.side_effect = [b"--frame\r\nContent-Type: image/jpeg\r\n\r\nfakejpg\r\n", b""]
+
+        with patch("urllib.request.urlopen", return_value=mock_stream):
+            response = self.client.get("/api/camera/camera.driveway/stream/")
+            assert response.status_code == 200
+            assert "multipart/x-mixed-replace" in response["Content-Type"]
+            content = b"".join(response.streaming_content)
+            assert b"fakejpg" in content
+
+    def test_camera_stream_fallback_to_snapshot(self) -> None:
+        # When stream fails, it falls back to camera_snapshot which calls HARestClient
+        with (
+            patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")),
+            patch(
+                "ha.client.HARestClient.get_camera_snapshot",
+                new_callable=AsyncMock,
+                return_value=(b"\xff\xd8\xff\xe0snapshot", "image/jpeg"),
+            ),
+        ):
+            response = self.client.get("/api/camera/camera.driveway/stream/")
+            assert response.status_code == 200
+            assert response["Content-Type"] == "image/jpeg"
+            assert response.content == b"\xff\xd8\xff\xe0snapshot"
+
     def test_ingress_middleware_ip_filter(self) -> None:
         # Ingress port 8099 with non-ingress IP should be 403
         res = self.client.get("/", SERVER_PORT="8099", REMOTE_ADDR="192.168.1.50")
@@ -157,3 +190,4 @@ class TestKioskMiddleware(SimpleTestCase):
         # Ingress port 8099 with authorized IP 172.30.32.2 should be allowed
         res_ok = self.client.get("/", SERVER_PORT="8099", REMOTE_ADDR="172.30.32.2")
         assert res_ok.status_code == 200
+

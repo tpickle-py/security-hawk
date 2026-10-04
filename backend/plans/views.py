@@ -13,16 +13,20 @@ Endpoints:
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
 import uuid
+import zipfile
 
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
+from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from plans.migrations import migrate_plan_data
 from plans.sanitize import sanitize_svg
 from plans.schema import default_plan, new_plan_id, validate_plan
 from plans.storage import PlanStorage
@@ -240,9 +244,6 @@ def _update_placed_entities(plan_id: str, plan_data: dict) -> None:
 @require_GET
 def export_plan(request, plan_id):
     """Export a plan as a downloadable JSON file attachment."""
-    from django.http import HttpResponse
-    from django.utils.text import slugify
-
     plan = get_storage().load(plan_id)
     if not plan:
         return JsonResponse({"error": "Plan not found"}, status=404)
@@ -258,16 +259,98 @@ def export_plan(request, plan_id):
     return response
 
 
+@require_GET
+def export_bundle(request, plan_id):
+    """Export a complete plan bundle (.zip) containing plan.json and background assets (Spec §Import and export)."""
+    plan = get_storage().load(plan_id)
+    if not plan:
+        return JsonResponse({"error": "Plan not found"}, status=404)
+
+    safe_name = slugify(plan.get("name", plan_id)) or "floorplan"
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # 1. Write plan.json
+        zf.writestr("plan.json", json.dumps(plan, indent=2))
+
+        # 2. Write assets if they exist
+        plan_assets_dir = os.path.join(str(settings.ASSETS_DIR), plan_id)
+        if os.path.exists(plan_assets_dir):
+            for fname in os.listdir(plan_assets_dir):
+                fpath = os.path.join(plan_assets_dir, fname)
+                if os.path.isfile(fpath):
+                    zf.write(fpath, arcname=f"assets/{fname}")
+
+    response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="{safe_name}_bundle.zip"'
+    return response
+
+
 @csrf_exempt
 @require_POST
 def import_plan(request, plan_id=None):
-    """Import a plan from an uploaded JSON file or request body."""
-    from plans.migrations import migrate_plan_data
-
+    """Import a plan from an uploaded JSON file, ZIP bundle, or request body."""
     # Check for file upload or body payload
     if request.FILES and "file" in request.FILES:
+        uploaded_file = request.FILES["file"]
+        is_zip = uploaded_file.name.endswith(".zip")
+        content_prefix = uploaded_file.read(4)
+        uploaded_file.seek(0)
+
+        # Handle ZIP bundle (.zip or zip magic bytes)
+        if is_zip or content_prefix.startswith(b"PK\x03\x04"):
+            try:
+                zip_bytes = uploaded_file.read()
+                zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+                plan_json_name = None
+                for name in zf.namelist():
+                    if name == "plan.json" or name.endswith("/plan.json") or (name.endswith(".json") and not plan_json_name):
+                        plan_json_name = name
+
+                if not plan_json_name:
+                    return JsonResponse({"error": "No plan.json found in ZIP bundle"}, status=400)
+
+                raw_json = zf.read(plan_json_name).decode("utf-8")
+                data = json.loads(raw_json)
+
+                # Migrate schema if older version
+                migrated_data, was_migrated = migrate_plan_data(data)
+                errors = validate_plan(migrated_data)
+                if errors:
+                    return JsonResponse({"error": "Validation failed", "details": errors}, status=400)
+
+                target_id = plan_id or data.get("id") or str(uuid.uuid4())[:8]
+
+                # Extract assets safely into plan_assets_dir
+                plan_assets_dir = os.path.join(str(settings.ASSETS_DIR), target_id)
+                os.makedirs(plan_assets_dir, exist_ok=True)
+                for member in zf.namelist():
+                    if member.startswith("assets/") and not member.endswith("/"):
+                        filename = os.path.basename(member)
+                        if filename:
+                            out_path = os.path.join(plan_assets_dir, filename)
+                            with open(out_path, "wb") as out_f:
+                                out_f.write(zf.read(member))
+
+                get_storage().save(target_id, migrated_data)
+                _update_placed_entities(target_id, migrated_data)
+
+                logger.info("Imported plan bundle %s (migrated: %s)", target_id, was_migrated)
+                return JsonResponse(
+                    {
+                        "status": "imported",
+                        "plan_id": target_id,
+                        "plan": migrated_data,
+                        "migrated": was_migrated,
+                        "is_bundle": True,
+                    }
+                )
+            except Exception as e:
+                logger.error("Failed to extract ZIP bundle: %s", e)
+                return JsonResponse({"error": f"Failed to extract ZIP bundle: {e}"}, status=400)
+
+        # Handle regular JSON file
         try:
-            uploaded_file = request.FILES["file"]
             raw_content = uploaded_file.read().decode("utf-8")
             data = json.loads(raw_content)
         except Exception as e:
@@ -302,5 +385,6 @@ def import_plan(request, plan_id=None):
             "plan_id": target_id,
             "plan": migrated_data,
             "migrated": was_migrated,
+            "is_bundle": False,
         }
     )

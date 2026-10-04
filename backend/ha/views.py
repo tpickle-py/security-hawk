@@ -14,11 +14,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import urllib.request
 
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
+from ha.client import HARestClient
 from ha.registry import entity_registry
 
 logger = logging.getLogger(__name__)
@@ -139,8 +141,6 @@ def camera_snapshot(request, entity_id):
     if not entity_id.startswith("camera."):
         return JsonResponse({"error": "Not a camera entity"}, status=400)
 
-    from ha.client import HARestClient
-
     client = HARestClient()
     try:
         image_bytes, content_type = asyncio.get_event_loop().run_until_complete(
@@ -151,3 +151,35 @@ def camera_snapshot(request, entity_id):
         return JsonResponse({"error": "Failed to fetch snapshot"}, status=502)
 
     return HttpResponse(image_bytes, content_type=content_type)
+
+
+@require_GET
+def camera_stream(request, entity_id):
+    """Proxy live MJPEG camera stream from Home Assistant."""
+    if not entity_id.startswith("camera."):
+        return JsonResponse({"error": "Not a camera entity"}, status=400)
+
+    client = HARestClient()
+    url = f"{client.base_url}/camera_proxy_stream/{entity_id}"
+    req = urllib.request.Request(url, headers=client.headers)
+
+    try:
+        remote_stream = urllib.request.urlopen(req, timeout=10)
+        content_type = remote_stream.headers.get("Content-Type", "multipart/x-mixed-replace; boundary=--frame")
+
+        def stream_chunks():
+            try:
+                while True:
+                    chunk = remote_stream.read(4096)
+                    if not chunk:
+                        break
+                    yield chunk
+            except Exception:
+                pass
+            finally:
+                remote_stream.close()
+
+        return StreamingHttpResponse(stream_chunks(), content_type=content_type)
+    except Exception as e:
+        logger.debug("Failed to stream camera %s: %s, falling back to snapshot", entity_id, e)
+        return camera_snapshot(request, entity_id)

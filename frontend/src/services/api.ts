@@ -112,6 +112,10 @@ export const api = {
     return `${BASE_URL}/api/plans/${planId}/export/`;
   },
 
+  getPlanBundleExportUrl(planId: string): string {
+    return `${BASE_URL}/api/plans/${planId}/bundle/`;
+  },
+
   async importPlan(
     file: File,
     planId?: string
@@ -180,6 +184,10 @@ export const api = {
 
   getCameraSnapshotUrl(entityId: string): string {
     return `${BASE_URL}/api/camera/${entityId}/?t=${Date.now()}`;
+  },
+
+  getCameraStreamUrl(entityId: string): string {
+    return `${BASE_URL}/api/camera/${entityId}/stream/`;
   },
 
   resolveAssetUrl(url: string): string {

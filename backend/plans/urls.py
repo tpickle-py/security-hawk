@@ -13,5 +13,6 @@ urlpatterns = [
     path("plans/<str:plan_id>/versions/", views.list_versions, name="list_versions"),
     path("plans/<str:plan_id>/restore/", views.restore_version, name="restore_version"),
     path("plans/<str:plan_id>/export/", views.export_plan, name="export_plan"),
+    path("plans/<str:plan_id>/bundle/", views.export_bundle, name="export_bundle"),
     path("plans/<str:plan_id>/import/", views.import_plan, name="import_plan"),
 ]

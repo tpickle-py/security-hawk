@@ -1,8 +1,13 @@
 """Tests for plan export, import, and version rollback views."""
 
+import io
 import json
+import os
+import zipfile
 from unittest.mock import patch
 
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 
 from plans.storage import PlanStorage
@@ -121,3 +126,77 @@ def test_versions_and_restore(tmp_path):
         )
         assert r_res.status_code == 200
         assert r_res.json()["plan"]["name"] == "Version 1"
+
+
+def test_export_bundle_zip(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "ASSETS_DIR", tmp_path / "assets")
+    storage = PlanStorage(str(tmp_path / "plans"), str(tmp_path / "versions"))
+    storage.save("bundle_plan", _sample_plan("Bundle Manor"))
+
+    # Write dummy asset
+    asset_dir = tmp_path / "assets" / "bundle_plan"
+    os.makedirs(asset_dir, exist_ok=True)
+    with open(asset_dir / "blueprint.png", "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\nfakeimagecontent")
+
+    client = Client()
+    with patch("plans.views.get_storage", return_value=storage):
+        res = client.get("/api/plans/bundle_plan/bundle/")
+        assert res.status_code == 200
+        assert res["Content-Type"] == "application/zip"
+        assert "bundle-manor_bundle.zip" in res["Content-Disposition"]
+
+        zf = zipfile.ZipFile(io.BytesIO(res.content))
+        names = zf.namelist()
+        assert "plan.json" in names
+        assert "assets/blueprint.png" in names
+
+        imported_json = json.loads(zf.read("plan.json").decode("utf-8"))
+        assert imported_json["name"] == "Bundle Manor"
+        assert zf.read("assets/blueprint.png") == b"\x89PNG\r\n\x1a\nfakeimagecontent"
+
+
+def test_import_plan_bundle_zip(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "ASSETS_DIR", tmp_path / "assets")
+    storage = PlanStorage(str(tmp_path / "plans"), str(tmp_path / "versions"))
+
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("plan.json", json.dumps(_sample_plan("Unpacked Villa")))
+        zf.writestr("assets/floor1.svg", "<svg>test</svg>")
+
+    uploaded_zip = SimpleUploadedFile("villa.zip", zip_buf.getvalue(), content_type="application/zip")
+
+    client = Client()
+    with patch("plans.views.get_storage", return_value=storage):
+        res = client.post("/api/plans/import/", data={"file": uploaded_zip})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "imported"
+        assert data["is_bundle"] is True
+        assert data["plan"]["name"] == "Unpacked Villa"
+
+        target_id = data["plan_id"]
+        # Check asset extracted
+        extracted_asset = tmp_path / "assets" / target_id / "floor1.svg"
+        assert os.path.exists(extracted_asset)
+        with open(extracted_asset) as f:
+            assert f.read() == "<svg>test</svg>"
+
+
+def test_import_plan_bundle_missing_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "ASSETS_DIR", tmp_path / "assets")
+    storage = PlanStorage(str(tmp_path / "plans"), str(tmp_path / "versions"))
+
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("notes.txt", "No plan here")
+
+    uploaded_zip = SimpleUploadedFile("empty.zip", zip_buf.getvalue(), content_type="application/zip")
+
+    client = Client()
+    with patch("plans.views.get_storage", return_value=storage):
+        res = client.post("/api/plans/import/", data={"file": uploaded_zip})
+        assert res.status_code == 400
+        assert "No plan.json found" in res.json()["error"]
+

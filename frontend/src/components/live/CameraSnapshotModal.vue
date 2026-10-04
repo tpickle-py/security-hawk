@@ -20,6 +20,8 @@ const emit = defineEmits<{
 }>();
 
 const snapshotUrl = ref<string>("");
+const streamUrl = ref<string>("");
+const isLiveStreamMode = ref(false);
 const lastUpdatedTime = ref<string>("");
 const isMaximized = ref(false);
 const isHovered = ref(false);
@@ -32,6 +34,31 @@ function refreshSnapshot() {
   snapshotUrl.value = api.getCameraSnapshotUrl(props.endpoint.entity_id);
   const now = new Date();
   lastUpdatedTime.value = now.toLocaleTimeString();
+}
+
+function toggleStreamMode() {
+  isLiveStreamMode.value = !isLiveStreamMode.value;
+  if (isLiveStreamMode.value) {
+    streamUrl.value = api.getCameraStreamUrl(props.endpoint.entity_id);
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    lastUpdatedTime.value = "Streaming Live";
+  } else {
+    refreshSnapshot();
+    if (!refreshTimer) {
+      refreshTimer = window.setInterval(refreshSnapshot, 2500);
+    }
+  }
+}
+
+function handleStreamError() {
+  isLiveStreamMode.value = false;
+  refreshSnapshot();
+  if (!refreshTimer) {
+    refreshTimer = window.setInterval(refreshSnapshot, 2500);
+  }
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -120,6 +147,15 @@ onUnmounted(() => {
 
         <div class="window-controls">
           <button
+            class="stream-toggle-btn"
+            :class="{ 'stream-active': isLiveStreamMode }"
+            :title="isLiveStreamMode ? 'Switch to Periodic Snapshot (2.5s)' : 'Switch to Live Video Stream'"
+            @click="toggleStreamMode"
+          >
+            {{ isLiveStreamMode ? '🔴 LIVE VIDEO' : '📸 SNAPSHOT (2.5s)' }}
+          </button>
+
+          <button
             class="control-btn"
             :title="isMaximized ? 'Restore window' : 'Maximize window'"
             @click="toggleMaximize"
@@ -146,8 +182,16 @@ onUnmounted(() => {
       <!-- Camera Feed Display -->
       <div class="window-body">
         <img
+          v-if="isLiveStreamMode"
+          :src="streamUrl"
+          :alt="endpoint.label || 'Live Camera Stream'"
+          class="camera-stream"
+          @error="handleStreamError"
+        />
+        <img
+          v-else
           :src="snapshotUrl"
-          :alt="endpoint.label || 'Camera Feed'"
+          :alt="endpoint.label || 'Camera Snapshot'"
           class="camera-stream"
           @error="() => {}"
         />
@@ -247,7 +291,31 @@ onUnmounted(() => {
 .window-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.stream-toggle-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.stream-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+}
+
+.stream-toggle-btn.stream-active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
 }
 
 .control-btn {
