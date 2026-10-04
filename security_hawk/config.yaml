@@ -1,6 +1,6 @@
 ---
 name: "Security Hawk"
-version: "0.3.5"
+version: "0.3.6"
 slug: "security_hawk"
 description: "Interactive floor plan viewer with live sensor states, video streaming, and kiosk mode"
 url: "https://github.com/tpickle-py/security-hawk"
@@ -26,7 +26,8 @@ ports_description:
 # Home Assistant Supervisor API access
 hassio_api: true
 homeassistant_api: true
-hassio_role: default
+auth_api: true
+hassio_role: homeassistant
 
 # Options
 options:

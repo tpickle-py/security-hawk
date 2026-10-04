@@ -147,15 +147,23 @@ git push origin main
    - Because the container uses Home Assistant base images with `s6-overlay`, s6 requires being PID 1.
    - If `init: false` is omitted, the container crashes instantly with `s6-overlay-suexec: fatal: can only run as pid 1`.
 
-2. **`hassio_api: true` and `hassio_role: default` in `config.yaml`**:
-   - Required for Supervisor to inject `SUPERVISOR_TOKEN` into the container environment.
-   - Without this, `bashio::config` calls in `run.sh` will fail with `403 Forbidden` (`Unable to access the API, forbidden`).
+2. **`hassio_api: true`, `auth_api: true`, and `hassio_role: homeassistant` in `config.yaml`**:
+   - Required for Supervisor to inject `SUPERVISOR_TOKEN` with permissions to query Home Assistant Core and Supervisor endpoints.
+   - Setting `hassio_role: default` lacks required scopes and results in `403 Forbidden` (`Unable to access the API, forbidden`).
 
-3. **`SUPERVISOR_TOKEN` Fallback**:
+3. **`with-contenv` Shebang & Container Environment**:
+   - `s6-overlay` saves container environment variables under `/var/run/s6/container_environment/`.
+   - `run.sh` must use `#!/usr/bin/with-contenv bashio` (and import from `/var/run/s6/container_environment/` as fallback) so `SUPERVISOR_TOKEN` is passed to bashio and child processes.
+
+4. **`SUPERVISOR_TOKEN` Fallback**:
    - In `run.sh`, `SUPERVISOR_TOKEN` is exported as `export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"`.
    - Because `run.sh` executes with `set -u` (treat unset variables as error), missing tokens during standalone local container testing will cause an exit if not defaulted.
 
-4. **`security_hawk/` Subdirectory Mirror**:
+5. **Ingress Proxy Headers vs `REMOTE_ADDR`**:
+   - When Daphne runs with `--proxy-headers`, `request.META["REMOTE_ADDR"]` is set to the client browser IP from `X-Forwarded-For` (e.g. `192.168.87.89`).
+   - `IngressMiddleware` must check for `HTTP_X_INGRESS_PATH` or HA proxy IPs rather than strictly matching `REMOTE_ADDR == 172.30.32.2`, otherwise valid Ingress traffic is rejected with 403 Forbidden.
+
+6. **`security_hawk/` Subdirectory Mirror**:
    - `hassio-addons/repository-updater` looks for files inside the directory specified by `target:` in `ha-addons/.addons.yml` (`target: security_hawk`).
    - If files are only in the repository root and `security_hawk/` is absent, the updater fails with `An error occurred while loading the remote app configuration file`.
    - Always ensure changes to `config.yaml` or `DOCS.md` are reflected in `security_hawk/`.

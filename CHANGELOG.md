@@ -5,6 +5,12 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-10-04
+
+### Fixed
+- **Supervisor Role & Auth API**: Set `hassio_role: homeassistant` and `auth_api: true` in `config.yaml` to ensure the injected `SUPERVISOR_TOKEN` has proper API authorization scopes.
+- **s6-overlay Environment with `with-contenv`**: Set `run.sh` shebang to `#!/usr/bin/with-contenv bashio` so container environment variables (`SUPERVISOR_TOKEN`) are automatically loaded into all child processes.
+
 ## [0.3.5] - 2026-10-04
 
 ### Fixed

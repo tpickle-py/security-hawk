@@ -1,4 +1,4 @@
-#!/usr/bin/env bashio
+#!/usr/bin/with-contenv bashio
 
 # Import environment variables captured by s6-overlay (SUPERVISOR_TOKEN, etc.)
 for env_dir in /var/run/s6/container_environment /run/s6-container-environment /run/s6/container_environment; do

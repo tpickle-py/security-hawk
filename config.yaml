@@ -1,5 +1,5 @@
 name: "Security Hawk"
-version: "0.3.5"
+version: "0.3.6"
 slug: "security_hawk"
 description: "Floor plan viewer with live sensor and camera state"
 url: "https://github.com/tpickle/security-hawk"
@@ -25,7 +25,8 @@ ports_description:
 # HA API access
 hassio_api: true
 homeassistant_api: true
-hassio_role: default
+auth_api: true
+hassio_role: homeassistant
 
 # User-configurable options
 options:
