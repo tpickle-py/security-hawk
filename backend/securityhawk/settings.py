@@ -130,12 +130,19 @@ MAX_VERSIONS = 20
 DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
 
+def _int_env(key: str, default: int) -> int:
+    val = os.environ.get(key, "").strip()
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
 # Kiosk settings
 KIOSK_ENABLED = os.environ.get("KIOSK_ENABLED", "false").lower() == "true"
-KIOSK_PORT = int(os.environ.get("KIOSK_PORT", "8100"))
+KIOSK_PORT = _int_env("KIOSK_PORT", 8100)
 KIOSK_TOKEN = os.environ.get("KIOSK_TOKEN", "")
-QUIET_RETURN_SECONDS = int(os.environ.get("QUIET_RETURN", "120"))
-DEFAULT_VIEW = os.environ.get("DEFAULT_VIEW", "overview")
+QUIET_RETURN_SECONDS = _int_env("QUIET_RETURN", 120)
+DEFAULT_VIEW = os.environ.get("DEFAULT_VIEW", "") or "overview"
 
 # HA connection
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
