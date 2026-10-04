@@ -15,7 +15,7 @@ fi
 
 # Export for Django
 export KIOSK_ENABLED KIOSK_PORT KIOSK_TOKEN QUIET_RETURN DEFAULT_VIEW
-export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
 export DATA_DIR="/data"
 
 # Ensure data directories exist

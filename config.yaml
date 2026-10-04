@@ -23,7 +23,9 @@ ports_description:
   8100/tcp: "Kiosk page (direct access for TV)"
 
 # HA API access
+hassio_api: true
 homeassistant_api: true
+hassio_role: default
 
 # User-configurable options
 options:
