@@ -63,7 +63,7 @@ jobs:
     needs: build
     name: Dispatch Update to ha-addons
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && secrets.UPDATER_TOKEN != ''
+    if: github.event_name == 'release'
     continue-on-error: true
     steps:
       - name: Trigger ha-addons updater
