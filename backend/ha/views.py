@@ -143,9 +143,17 @@ def camera_snapshot(request, entity_id):
 
     client = HARestClient()
     try:
-        image_bytes, content_type = asyncio.get_event_loop().run_until_complete(
-            client.get_camera_snapshot(entity_id)
-        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            image_bytes, content_type = asyncio.run_coroutine_threadsafe(
+                client.get_camera_snapshot(entity_id), loop
+            ).result()
+        else:
+            image_bytes, content_type = asyncio.run(client.get_camera_snapshot(entity_id))
     except Exception as e:
         logger.error("Failed to fetch camera snapshot for %s: %s", entity_id, e)
         return JsonResponse({"error": "Failed to fetch snapshot"}, status=502)

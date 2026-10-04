@@ -1,6 +1,6 @@
 [project]
 name = "security-hawk"
-version = "0.3.3"
+version = "0.3.4"
 description = "Home Assistant app — floor plan viewer with live sensor and camera state"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -63,6 +63,7 @@ quote-style = "double"
 DJANGO_SETTINGS_MODULE = "securityhawk.settings"
 pythonpath = ["backend"]
 testpaths = ["tests"]
+norecursedirs = [".*", "build", "dist", "{arch}", "*.egg", "scripts"]
 asyncio_mode = "auto"
 addopts = "--cov=backend --cov-report=term-missing"
 
@@ -71,6 +72,7 @@ source = ["backend"]
 omit = [
     "backend/securityhawk/asgi.py",
     "backend/manage.py",
+    "scripts/*",
 ]
 
 [tool.coverage.report]

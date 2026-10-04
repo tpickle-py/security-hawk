@@ -5,6 +5,15 @@ All notable changes to Security Hawk will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-10-04
+
+### Changed
+- Fix s6-overlay container supervision conflicts in Home Assistant by setting init: false
+- Add hassio_api: true and hassio_role: default for Supervisor API token injection
+- Safe fallback defaults in run.sh and settings.py for KIOSK_PORT, QUIET_RETURN_SECONDS, and SUPERVISOR_TOKEN
+- Fix async event loop handling in synchronous camera snapshot fallback view
+- Automated semantic version release script (scripts/bump_version.py)
+
 ## [0.3.3] - 2026-10-04
 
 ### Fixed
