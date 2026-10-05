@@ -182,10 +182,26 @@ function handleInsertGrid() {
 
   emit("close");
 }
+
+const previewFontSize = computed(() => {
+  const targetPx = selectedCols.value > 4 || selectedRows.value > 4 ? 11 : 13;
+  return Math.max(10, Math.round(targetPx / (previewScale.value || 1)));
+});
+
+function getPreviewCellLabel(idx: number): string {
+  if (selectedCols.value > 4 || selectedRows.value > 4) {
+    const prefixChar = namingPrefix.value === "Custom" && customPrefix.value.trim()
+      ? customPrefix.value.trim().substring(0, 1).toUpperCase()
+      : (namingPrefix.value === "Bedroom" ? "BR" : namingPrefix.value.substring(0, 1));
+    return `${prefixChar}${idx + 1}`;
+  }
+  return generatedNames.value[idx] || `Room ${idx + 1}`;
+}
 </script>
 
 <template>
-  <div class="modal-backdrop" @click.self="emit('close')">
+  <Teleport to="body">
+    <div class="modal-backdrop" @click.self="emit('close')">
     <div class="modal-card glass-panel">
       <!-- Modal Header -->
       <div class="modal-header">
@@ -369,10 +385,11 @@ function handleInsertGrid() {
                         text-anchor="middle"
                         dominant-baseline="central"
                         fill="#ffffff"
-                        font-size="12"
+                        :font-size="previewFontSize"
                         font-weight="bold"
                       >
-                        {{ generatedNames[(r - 1) * selectedCols + (c - 1)] }}
+                        {{ getPreviewCellLabel((r - 1) * selectedCols + (c - 1)) }}
+                        <title>{{ generatedNames[(r - 1) * selectedCols + (c - 1)] }}</title>
                       </text>
                     </g>
                   </g>
@@ -397,24 +414,26 @@ function handleInsertGrid() {
       </div>
     </div>
   </div>
+</Teleport>
 </template>
 
 <style scoped>
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 16px;
+  z-index: 9999;
+  padding: 20px;
 }
 
 .modal-card {
   width: 100%;
   max-width: 760px;
+  max-height: 90vh;
   background: #111827;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--radius-lg, 12px);
@@ -423,6 +442,12 @@ function handleInsertGrid() {
   flex-direction: column;
   overflow: hidden;
   animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-body {
+  padding: 18px 24px;
+  overflow-y: auto;
+  max-height: calc(90vh - 130px);
 }
 
 @keyframes modalScale {

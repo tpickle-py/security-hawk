@@ -11,6 +11,11 @@ import LiveCanvas from "@/components/live/LiveCanvas.vue";
 import EntityPicker from "@/components/editor/EntityPicker.vue";
 import PropertyPanel from "@/components/editor/PropertyPanel.vue";
 import Toolbar from "@/components/editor/Toolbar.vue";
+import CadCommandBar from "@/components/editor/CadCommandBar.vue";
+import RoomGridModal from "@/components/editor/RoomGridModal.vue";
+import ExportPlanModal from "@/components/editor/ExportPlanModal.vue";
+import VersionHistoryModal from "@/components/editor/VersionHistoryModal.vue";
+import CoverageAuditModal from "@/components/editor/CoverageAuditModal.vue";
 import SiteNav from "@/components/layout/SiteNav.vue";
 import ModeToggle from "@/components/layout/ModeToggle.vue";
 import ConnectionBanner from "@/components/shared/ConnectionBanner.vue";
@@ -149,6 +154,12 @@ onMounted(() => {
         <div class="canvas-wrapper">
           <Toolbar />
           <EditorCanvas />
+          <CadCommandBar
+            v-if="editorStore.showCadCommandBar"
+            @open-grid-modal="editorStore.showRoomGridModal = true"
+            @open-export-modal="editorStore.showExportModal = true"
+            @open-history-modal="editorStore.showVersionModal = true"
+          />
         </div>
         <PropertyPanel />
       </template>
@@ -178,6 +189,32 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Room Grid Matrix Modal -->
+    <RoomGridModal
+      v-if="editorStore.showRoomGridModal"
+      @close="editorStore.showRoomGridModal = false"
+    />
+
+    <!-- Export Plan Modal -->
+    <ExportPlanModal
+      v-if="editorStore.showExportModal && planStore.currentPlanId"
+      :plan-id="planStore.currentPlanId"
+      @close="editorStore.showExportModal = false"
+    />
+
+    <!-- Version History Modal -->
+    <VersionHistoryModal
+      v-if="editorStore.showVersionModal && planStore.currentPlanId"
+      :plan-id="planStore.currentPlanId"
+      @close="editorStore.showVersionModal = false"
+    />
+
+    <!-- AI Security Coverage Audit Modal -->
+    <CoverageAuditModal
+      :show="editorStore.showCoverageAuditModal"
+      @close="editorStore.showCoverageAuditModal = false"
+    />
 
     <!-- Application & Integration Settings Modal -->
     <SettingsModal

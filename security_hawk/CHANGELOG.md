@@ -2,8 +2,44 @@
 
 All notable changes to Security Hawk will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.4.0] - 2026-10-05
+
+### Added
+- **Model Context Protocol (MCP) AI Tools Server**:
+  - Embedded Model Context Protocol server exposing JSON-RPC 2.0 (`POST /api/mcp/rpc`) and direct REST endpoints (`GET /api/mcp/tools`, `POST /api/mcp/execute`, `GET /api/mcp/status`).
+  - 5 configurable access control permission tiers (`read_only`, `design_only`, `rules_only`, `full_access`, `disabled`) with optional Bearer / X-MCP-Key token authentication.
+  - Automatic sensitive data redaction masking IPv4 addresses (`[REDACTED_IP]`) and authentication headers (`[REDACTED_TOKEN]`).
+  - Native tools for AI assistants to inspect layouts, audit security coverage gaps, construct rooms/walls, and synthesize compound rules.
+- **AutoCAD Command Bar & Keyboard Ergonomics**:
+  - Keyboard-first command terminal supporting 20+ CAD commands (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, `AUDIT`, `ZEN`).
+  - Global `/` or `:` hotkey activation focusing the command line from anywhere on the canvas.
+  - Contextual quick-action chips (`[ROTATE 90°]`, `[RENAME]`, `[GRID]`, `[AUDIT]`) that dynamically adapt to the currently selected object.
+  - Collapsible quick-reference drawer and dockable placement (`bottom`, `top`, `float`).
+- **Keyword Taxonomy & "Smart Match" 1-Click Engine**:
+  - Comprehensive keyword taxonomy library covering 13 architectural room types with tokenization and abbreviation expansion (`lr`, `mbr`, `kit`, `wc`, `gar`, `off`, `din`, etc.).
+  - Confidence scoring engine combining exact token matching with fuzzy Levenshtein distance metrics.
+  - Interactive Smart Match review modal with confidence badges (`High` vs `Medium`), match rationales, and 1-click batch area assignment.
+  - Point-in-polygon canvas drop hit-testing: dragging an unassigned entity card directly onto any room polygon automatically designates its Home Assistant area with 0 dropdown clicks.
+- **Magnetic Smart Alignment Guides & Inline Renaming**:
+  - Dynamic edge snapping displaying cyan dashed alignment lines when moving or resizing rooms and sub-areas.
+  - Double-click inline room and sub-area title editing via embedded SVG `<foreignObject>` (`Enter` to save, `Esc` to cancel).
+- **Dockable & Minimizable Panels**:
+  - Entity Picker and Properties panels dockable to `left`, `right`, or free `float` with draggable header bars and persistent `localStorage` coordinates.
+  - Minimizable into interactive floating badges (`🏷️ Entities (N)`, `📐 Properties & Zones`) to maximize drafting space.
+- **Interactive 8-Handle Room Resizing & Dragging**:
+  - Direct dragging of rooms and sub-areas across canvas space.
+  - Interactive 8-handle bounding box (`NW`, `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`) recalculating vertices dynamically during drag operations.
+- **Workspace Presets & Zen Canvas**:
+  - 1-click layout switcher in Toolbar between `🗺️ Mapping Mode` (dual-column), `⌨️ CAD Focus` (command bar active, side panels collapsed), and `🧘 Zen Canvas` (maximized drafting canvas).
+- **Security Coverage Audit HUD**:
+  - One-click `🛡️ Audit` button in toolbar and CAD bar executing MCP `validate_security_coverage` with visual status banners, stats grid, and security gap recommendations.
+- **Right-Click Context Menu Modal Popup**:
+  - Viewport-clamped context menu for quick actions on canvas, endpoints, rooms, and walls (Properties, Rotate ±90°, Duplicate, Cutout, Room Grid Insert, Delete).
+- **Camera 90° FOV Cone Alignment**:
+  - Re-aligned camera icon body 90 degrees forward to face the sensor coverage cone and aiming ray.
+
+### Changed
+- **Accurate Unassigned & Hidden Entity Counts**: Real-time synchronization of `unassigned_entities_count` reflecting ignored/hidden entities and domain filters without page refresh.
 
 ## [0.3.12] - 2026-10-04
 
@@ -26,8 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.10] - 2026-10-04
 
-### Changed
-Add Kiosk share links in Settings, active viewer telemetry, and bulk hide for entity types
+### Added
+- **Kiosk Share Links in Settings**: Added copyable direct Kiosk URLs in Settings with auto-generated security tokens.
+- **Active Viewer Telemetry**: Real-time connected viewer counts and active session monitoring.
+- **Bulk Hide for Entity Types**: One-click domain bulk-hiding (`switch.*`, `light.*`, `sensor.*`) to filter non-security entities from unassigned lists.
 
 ## [0.3.9] - 2026-10-04
 
@@ -66,12 +104,12 @@ Add Kiosk share links in Settings, active viewer telemetry, and bulk hide for en
 
 ## [0.3.4] - 2026-10-04
 
-### Changed
-- Fix s6-overlay container supervision conflicts in Home Assistant by setting init: false
-- Add hassio_api: true and hassio_role: default for Supervisor API token injection
-- Safe fallback defaults in run.sh and settings.py for KIOSK_PORT, QUIET_RETURN_SECONDS, and SUPERVISOR_TOKEN
-- Fix async event loop handling in synchronous camera snapshot fallback view
-- Automated semantic version release script (scripts/bump_version.py)
+### Fixed
+- **s6-overlay Supervision**: Prevent container supervision conflicts in Home Assistant by configuring `init: false`.
+- **Supervisor Token Access**: Configure `hassio_api: true` and `hassio_role: default` for Supervisor API token injection.
+- **Safe Fallback Defaults**: Safe defaults in `run.sh` and `settings.py` for `KIOSK_PORT`, `QUIET_RETURN_SECONDS`, and `SUPERVISOR_TOKEN`.
+- **Camera Fallback View**: Fix async event loop handling in synchronous camera snapshot fallback view.
+- **Release Automation**: Added automated semantic version release workflow script (`scripts/bump_version.py`).
 
 ## [0.3.3] - 2026-10-04
 

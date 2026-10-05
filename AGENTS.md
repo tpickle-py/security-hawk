@@ -29,12 +29,13 @@ security-hawk/
 │   ├── ha/                   # Home Assistant REST & WebSocket client, area/entity registry, proxy views
 │   ├── kiosk/                # Route B Kiosk middleware, token auth, read-only enforcement
 │   ├── live/                 # Channels WebSocket consumers, state manager, camera workers
+│   ├── mcp/                  # Model Context Protocol (MCP) AI server (JSON-RPC 2.0 & REST tools)
 │   ├── plans/                # Floor plan storage, SVG sanitizer, schema migrations, REST API
 │   ├── rules/                # Compound rule engine, background queue, action plugins (email, webhook, etc.)
 │   ├── securityhawk/         # Django settings, ASGI/WSGI entrypoints, root URL router
 │   └── settings_mgr/         # User preferences and integration settings storage
 ├── frontend/                 # Vue 3 + Vite + TypeScript SPA
-│   ├── src/                  # Components, Pinia stores, router, API client
+│   ├── src/                  # Components (CAD command bar, context menu, dockable panels, canvas), stores, API
 │   └── dist/                 # Production build output (copied to backend/static/frontend/)
 ├── security_hawk/            # Mirrored add-on files consumed by repository-updater
 │   ├── config.yaml           # Add-on configuration manifest (init: false, hassio_api: true)
@@ -86,9 +87,16 @@ npm run dev    # Vite dev server with HMR
 npm run build  # Compiles and copies bundle into backend/static/frontend/
 ```
 
+> [!NOTE]
+> **Execution Rule for Agents**: `npm run build` executes `vue-tsc -b` type checking followed by `vite build`. Depending on system load, full compilation may take 10–25 seconds. When running `npm run build` via `run_command`, **always launch it in the background** (`WaitMsBeforeAsync: 500`) to prevent synchronous timeout cancellations. You will be notified automatically when the background task finishes. For quick incremental syntax checks without waiting for full bundle bundling, run `npx vite build` or `npx vue-tsc --noEmit`.
+
+
 ---
 
 ## 4. Semantic Version Bumping & Release Workflow
+
+> [!IMPORTANT]
+> **No Frontend Build Needed During Release**: When bumping versions or cutting releases, **DO NOT run `npm run build`**. `frontend/dist/` and `backend/static/frontend/` are `.gitignore`d. Docker images automatically build the production bundle from source via multi-stage build in CI (`Dockerfile`). Running `npm run build` locally after version bumps is completely unnecessary and can hang tool execution due to local lock contention.
 
 When bumping versions, **do not manually edit individual files**. Use the automated script:
 
@@ -169,3 +177,39 @@ git push origin main
    - `hassio-addons/repository-updater` looks for files inside the directory specified by `target:` in `ha-addons/.addons.yml` (`target: security_hawk`).
    - If files are only in the repository root and `security_hawk/` is absent, the updater fails with `An error occurred while loading the remote app configuration file`.
    - Always ensure changes to `config.yaml`, `CHANGELOG.md`, or `DOCS.md` are reflected in `security_hawk/`.
+
+---
+
+## 6. Subsystem Reference: MCP & Advanced Canvas Architecture
+
+### Model Context Protocol (MCP) Server (`backend/mcp/`)
+- **Transport & Endpoints**:
+  - `POST /api/mcp/rpc`: JSON-RPC 2.0 endpoint implementing `tools/list` and `tools/call`.
+  - `GET /api/mcp/tools` & `POST /api/mcp/execute`: Direct REST tools introspection and execution.
+  - `GET /api/mcp/status`: Service discovery and current access control status.
+- **Granular Access Control Levels**:
+  - `read_only`: Inspect floor plans, query entities, check coverage recommendations.
+  - `design_only`: Read access plus creating/updating rooms, sub-areas, and walls.
+  - `rules_only`: Read access plus creating/updating compound rules.
+  - `full_access`: Unrestricted access across design and rule creation.
+  - `disabled`: All MCP requests rejected with 403 Forbidden.
+- **Sensitive Data Protection**:
+  - All responses automatically strip raw tokens and mask IPv4 addresses (`[REDACTED_IP]`) and authentication headers (`[REDACTED_TOKEN]`).
+
+### AutoCAD Command Bar (`CadCommandBar.vue`)
+- Implements a keyboard-first terminal interface with 20+ CAD commands (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, etc.).
+- Includes autocomplete recommendations, arrow key command history (`Up`/`Down`), docking (`bottom`, `top`, `float`), and a collapsible quick-reference helper drawer.
+
+### Dockable & Minimizable Panels (`EntityPicker.vue`, `PropertyPanel.vue`)
+- Dockable to `left`, `right`, or `float`.
+- Draggable header bars persist free-floating viewport coordinates (`(x, y)`) in `localStorage`.
+- Minimizable into interactive floating badges (`🏷️ Entities (N)`, `📐 Properties & Zones`).
+- Positions and dock states can be reset to defaults in Settings.
+
+### Interactive 8-Handle Room Resizing & Dragging (`EditorCanvas.vue`)
+- Architectural rooms (both `SubArea` and polygon `Shape` rooms) can be selected and dragged directly across canvas space.
+- An interactive bounding box provides 8 resize handles (`NW`, `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`) recalculating vertices dynamically during drag operations.
+
+### Accurate Unassigned Entity Tracking
+- Entity picker filters and unassigned counts (`unassigned_entities_count`) immediately reflect hidden or ignored entities and domain filters without requiring a page refresh.
+

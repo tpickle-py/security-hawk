@@ -23,7 +23,8 @@ function downloadBundle() {
 </script>
 
 <template>
-  <div class="modal-backdrop" @click.self="emit('close')">
+  <Teleport to="body">
+    <div class="modal-backdrop" @click.self="emit('close')">
     <div class="modal-card glass-panel">
       <div class="modal-header">
         <div class="title-with-icon">
@@ -85,6 +86,7 @@ function downloadBundle() {
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <style scoped>

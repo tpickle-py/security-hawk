@@ -76,13 +76,32 @@ def lookup_entity_by_friendly_name(request):
 @require_GET
 def list_areas(request):
     """Return all Home Assistant areas/rooms and count unassigned entities."""
-    areas = entity_registry.get_areas()
-    all_entities = entity_registry.search(limit=2000)
-    unassigned_count = sum(1 for e in all_entities if not e.get("area_id"))
+    from settings_mgr.storage import settings_storage
 
-    # Calculate entity counts per area
+    settings_data = settings_storage.load()
+    ignored_entities = set(settings_data.get("ignored_entities", []))
+    ignored_domains = set(settings_data.get("ignored_domains", []))
+
+    def is_ignored(e):
+        eid = e.get("entity_id", "")
+        if eid in ignored_entities:
+            return True
+        domain = eid.split(".")[0] if "." in eid else ""
+        return domain in ignored_domains
+
+    areas = entity_registry.get_areas()
+    all_entities = (
+        list(entity_registry._entities.values())
+        if entity_registry._entities
+        else entity_registry.search(limit=5000)
+    )
+    unassigned_count = sum(1 for e in all_entities if not e.get("area_id") and not is_ignored(e))
+
+    # Calculate entity counts per area (excluding ignored entities)
     area_counts = {}
     for e in all_entities:
+        if is_ignored(e):
+            continue
         aid = e.get("area_id")
         if aid:
             area_counts[aid] = area_counts.get(aid, 0) + 1

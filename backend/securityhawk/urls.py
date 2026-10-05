@@ -77,6 +77,7 @@ urlpatterns = [
     path("api/", include("rules.urls")),
     path("api/", include("settings_mgr.urls")),
     path("api/", include("kiosk.urls")),
+    path("api/mcp/", include("mcp.urls")),
     # Serve assets (frontend JS/CSS/fonts or user uploaded plan assets)
     path("assets/<path:path>", asset_view, name="assets"),
     # Serve static files

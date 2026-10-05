@@ -11,9 +11,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "select-shape", shapeId: string): void;
   (e: "wall-click", wallId: string, clickPoint: { x: number; y: number }): void;
+  (e: "room-drag-start", shape: Shape, event: MouseEvent): void;
+  (e: "shape-contextmenu", shape: Shape, event: MouseEvent): void;
+  (e: "room-dblclick", shape: Shape, event: MouseEvent): void;
 }>();
 
 const editorStore = useEditorStore();
+
+function handleRoomMouseDown(shape: Shape, e: MouseEvent) {
+  emit("select-shape", shape.id);
+  if (editorStore.activeTool === "select" && e.button === 0) {
+    emit("room-drag-start", shape, e);
+  }
+}
 
 // Helper to compute room polygon points string and centroid for label
 function getPolygonPoints(geom: RoomGeometry): string {
@@ -133,7 +143,13 @@ function handleWallClick(shape: Shape, e: MouseEvent) {
     <!-- 1. Room Polygons Layer (rendered beneath walls) -->
     <g class="rooms-group">
       <template v-for="shape in shapes" :key="shape.id">
-        <g v-if="shape.type === 'room'" class="room-shape" @click.stop="emit('select-shape', shape.id)">
+        <g
+          v-if="shape.type === 'room'"
+          class="room-shape"
+          @mousedown.stop="handleRoomMouseDown(shape, $event)"
+          @dblclick.stop="emit('room-dblclick', shape, $event)"
+          @contextmenu.prevent.stop="emit('shape-contextmenu', shape, $event)"
+        >
           <polygon
             :points="getPolygonPoints(shape.geometry as RoomGeometry)"
             :fill="(shape.style?.fill as string) || 'rgba(99, 102, 241, 0.12)'"
@@ -157,7 +173,12 @@ function handleWallClick(shape: Shape, e: MouseEvent) {
     <!-- 2. Walls Layer with Cutouts -->
     <g class="walls-group">
       <template v-for="shape in shapes" :key="shape.id">
-        <g v-if="shape.type === 'wall'" class="wall-shape" @click="handleWallClick(shape, $event)">
+        <g
+          v-if="shape.type === 'wall'"
+          class="wall-shape"
+          @click="handleWallClick(shape, $event)"
+          @contextmenu.prevent.stop="emit('shape-contextmenu', shape, $event)"
+        >
           <!-- Processed Wall Segments -->
           <line
             v-for="(seg, idx) in processWallGeometry(shape.geometry as WallGeometry).segments"
@@ -220,7 +241,12 @@ function handleWallClick(shape: Shape, e: MouseEvent) {
     <!-- 3. Architectural Text Labels -->
     <g class="labels-group">
       <template v-for="shape in shapes" :key="shape.id">
-        <g v-if="shape.type === 'label'" class="label-shape" @click.stop="emit('select-shape', shape.id)">
+        <g
+          v-if="shape.type === 'label'"
+          class="label-shape"
+          @click.stop="emit('select-shape', shape.id)"
+          @contextmenu.prevent.stop="emit('shape-contextmenu', shape, $event)"
+        >
           <text
             :x="(shape.geometry as LabelGeometry).x"
             :y="(shape.geometry as LabelGeometry).y"

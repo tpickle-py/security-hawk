@@ -54,6 +54,16 @@ function handleResetDockPositions() {
   toolbarDock.value = "top";
   liveStore.resetDockPositions();
   editorStore.resetToolbarDock();
+  try {
+    localStorage.removeItem("sh_entities_dock");
+    localStorage.removeItem("sh_entities_pos");
+    localStorage.removeItem("sh_entities_min");
+    localStorage.removeItem("sh_props_dock");
+    localStorage.removeItem("sh_props_pos");
+    localStorage.removeItem("sh_props_min");
+    localStorage.removeItem("sh_cad_dock");
+    localStorage.removeItem("sh_show_cad");
+  } catch {}
 }
 
 // MQTT

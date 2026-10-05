@@ -361,6 +361,30 @@ export const usePlanStore = defineStore("plan", () => {
     markDirtyAndAutosave();
   }
 
+  function updateSubArea(subAreaId: string, updates: Partial<SubArea>, recordHistory = true) {
+    if (!currentFloor.value || !currentFloor.value.sub_areas) return;
+    const idx = currentFloor.value.sub_areas.findIndex((s) => s.id === subAreaId);
+    if (idx !== -1) {
+      if (recordHistory) snapshotBeforeMutation();
+      currentFloor.value.sub_areas[idx] = {
+        ...currentFloor.value.sub_areas[idx],
+        ...updates,
+      };
+      if (recordHistory) markDirtyAndAutosave();
+    }
+  }
+
+  function moveSubArea(subAreaId: string, dx: number, dy: number, recordHistory = false) {
+    if (!currentFloor.value || !currentFloor.value.sub_areas) return;
+    const sa = currentFloor.value.sub_areas.find((s) => s.id === subAreaId);
+    if (sa) {
+      if (recordHistory) snapshotBeforeMutation();
+      sa.x += dx;
+      sa.y += dy;
+      if (recordHistory) markDirtyAndAutosave();
+    }
+  }
+
   const currentShapes = computed<Shape[]>(() => {
     if (isOverview.value) {
       return (site.value?.overview.shapes as Shape[]) || [];
@@ -392,6 +416,50 @@ export const usePlanStore = defineStore("plan", () => {
       list[idx] = { ...list[idx], ...updates };
       markDirtyAndAutosave();
     }
+  }
+
+  function moveShape(shapeId: string, dx: number, dy: number, recordHistory = false) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const shape = list.find((s) => s.id === shapeId);
+    if (!shape) return;
+
+    if (recordHistory) snapshotBeforeMutation();
+
+    if (shape.type === "room") {
+      const geom = shape.geometry as RoomGeometry;
+      if (geom.points) {
+        geom.points = geom.points.map(([px, py]) => [Math.round(px + dx), Math.round(py + dy)]);
+      }
+    } else if (shape.type === "wall") {
+      const geom = shape.geometry as WallGeometry;
+      geom.x1 += dx;
+      geom.y1 += dy;
+      geom.x2 += dx;
+      geom.y2 += dy;
+    } else if (shape.type === "label") {
+      const geom = shape.geometry as any;
+      geom.x += dx;
+      geom.y += dy;
+    }
+
+    if (recordHistory) markDirtyAndAutosave();
+  }
+
+  function resizeRoomShape(shapeId: string, newPoints: Array<[number, number]>, recordHistory = false) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const shape = list.find((s) => s.id === shapeId && s.type === "room");
+    if (!shape) return;
+
+    if (recordHistory) snapshotBeforeMutation();
+    const geom = shape.geometry as RoomGeometry;
+    geom.points = newPoints;
+    if (recordHistory) markDirtyAndAutosave();
   }
 
   function removeShape(shapeId: string) {
@@ -646,9 +714,13 @@ export const usePlanStore = defineStore("plan", () => {
     ungroupEndpoints,
     nestEndpoint,
     addSubArea,
+    updateSubArea,
+    moveSubArea,
     removeSubArea,
     addShape,
     updateShape,
+    moveShape,
+    resizeRoomShape,
     removeShape,
     addWallOpening,
     removeWallOpening,

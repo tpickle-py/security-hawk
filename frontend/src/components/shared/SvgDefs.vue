@@ -110,12 +110,15 @@
         <path d="M-4 3 L0 0 L4 3 M-4 6 L0 3 L4 6" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
       </g>
 
-      <!-- Camera Icon -->
+      <!-- Camera Icon (Tilted 90 degrees to face the directional FOV cone) -->
       <g id="icon-camera">
         <circle cx="0" cy="0" r="16" fill="#1e293b" stroke="#6366f1" stroke-width="2" />
-        <rect x="-8" y="-6" width="16" height="12" rx="2" fill="#4f46e5" stroke="#818cf8" stroke-width="1.5" />
-        <circle cx="0" cy="0" r="3.5" fill="#ffffff" />
-        <circle cx="5" cy="-3.5" r="1" fill="#a5b4fc" />
+        <g transform="rotate(90)">
+          <rect x="-8" y="-6" width="16" height="12" rx="2" fill="#4f46e5" stroke="#818cf8" stroke-width="1.5" />
+          <circle cx="0" cy="0" r="3.5" fill="#ffffff" />
+          <circle cx="5" cy="-3.5" r="1" fill="#a5b4fc" />
+        </g>
+        <polygon points="6,-3 10,-4.5 10,4.5 6,3" fill="#818cf8" />
       </g>
 
       <!-- Generic Sensor Icon -->

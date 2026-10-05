@@ -4,10 +4,6 @@ import { useEditorStore, VIEWPORT_CONFIGS, type ViewportPreset } from "@/stores/
 import { usePlanStore } from "@/stores/planStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { api } from "@/services/api";
-import VersionHistoryModal from "@/components/editor/VersionHistoryModal.vue";
-import ExportPlanModal from "@/components/editor/ExportPlanModal.vue";
-import RoomGridModal from "@/components/editor/RoomGridModal.vue";
-
 const editorStore = useEditorStore();
 const planStore = usePlanStore();
 const historyStore = useHistoryStore();
@@ -16,9 +12,6 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const importFileInputRef = ref<HTMLInputElement | null>(null);
 const isUploading = ref(false);
 const isImporting = ref(false);
-const showVersionModal = ref(false);
-const showExportModal = ref(false);
-const showRoomGridModal = ref(false);
 const showViewportMenu = ref(false);
 
 function selectViewportPreset(preset: ViewportPreset) {
@@ -76,7 +69,7 @@ function triggerImport() {
 }
 
 function handleExportPlan() {
-  showExportModal.value = true;
+  editorStore.showExportModal = true;
 }
 
 async function handleImportFileChange(e: Event) {
@@ -271,7 +264,7 @@ onUnmounted(() => {
       <button
         class="tool-btn"
         title="Insert Room & Subsection Grid (Table matrix picker for rooms / closets)"
-        @click="showRoomGridModal = true"
+        @click="editorStore.showRoomGridModal = true"
       >
         <svg viewBox="0 0 24 24" width="18" height="18">
           <path fill="currentColor" d="M3 3v18h18V3H3zm8 8H5V5h6v6zm2-6h6v6h-6V5zm-2 8v6H5v-6h6zm2 6v-6h6v6h-6z"/>
@@ -341,7 +334,7 @@ onUnmounted(() => {
       <button
         class="tool-btn"
         title="Version History (Rolling 20 Snapshots)"
-        @click="showVersionModal = true"
+        @click="editorStore.showVersionModal = true"
       >
         <svg viewBox="0 0 24 24" width="18" height="18">
           <path fill="currentColor" d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/>
@@ -471,6 +464,55 @@ onUnmounted(() => {
       >
         <span>⚓</span>
       </button>
+
+      <!-- Toggle AutoCAD Command Bar -->
+      <button
+        class="tool-btn action"
+        :class="{ active: editorStore.showCadCommandBar }"
+        title="Toggle AutoCAD Command Line (Command bar, shortcuts, helper)"
+        @click="editorStore.toggleCadCommandBar"
+      >
+        <span>⌨️</span>
+        <span>AutoCAD</span>
+      </button>
+
+      <!-- Security Coverage Audit (AI / MCP) -->
+      <button
+        class="tool-btn action audit-btn"
+        title="AI & Rules Security Coverage Audit (Identify blind spots, unmonitored doors)"
+        @click="editorStore.showCoverageAuditModal = true"
+      >
+        <span>🛡️</span>
+        <span>Audit</span>
+      </button>
+
+      <!-- Workspace Presets Switcher -->
+      <div class="workspace-presets">
+        <button
+          class="preset-btn"
+          :class="{ active: editorStore.activeWorkspacePreset === 'mapping' }"
+          title="Mapping Mode: Standard dual sidebars for setup"
+          @click="editorStore.setWorkspacePreset('mapping')"
+        >
+          🗺️
+        </button>
+        <button
+          class="preset-btn"
+          :class="{ active: editorStore.activeWorkspacePreset === 'cad' }"
+          title="CAD Focus Mode: Command line prompt, sidebars collapsed"
+          @click="editorStore.setWorkspacePreset('cad')"
+        >
+          ⌨️
+        </button>
+        <button
+          class="preset-btn"
+          :class="{ active: editorStore.activeWorkspacePreset === 'zen' }"
+          title="Zen Mode: Edge-to-edge canvas with all panels minimized"
+          @click="editorStore.setWorkspacePreset('zen')"
+        >
+          🧘
+        </button>
+      </div>
     </div>
 
     <!-- Save status -->
@@ -478,26 +520,6 @@ onUnmounted(() => {
       <span v-if="planStore.isSaving" class="status-saving">Saving...</span>
       <span v-else-if="planStore.lastSavedAt" class="status-saved">Saved</span>
     </div>
-
-    <!-- Export Plan Modal -->
-    <ExportPlanModal
-      v-if="showExportModal && planStore.currentPlanId"
-      :plan-id="planStore.currentPlanId"
-      @close="showExportModal = false"
-    />
-
-    <!-- Version History Modal -->
-    <VersionHistoryModal
-      v-if="showVersionModal && planStore.currentPlanId"
-      :plan-id="planStore.currentPlanId"
-      @close="showVersionModal = false"
-    />
-
-    <!-- Room Grid Generator Modal -->
-    <RoomGridModal
-      v-if="showRoomGridModal"
-      @close="showRoomGridModal = false"
-    />
   </div>
 </template>
 
@@ -621,6 +643,48 @@ onUnmounted(() => {
 
 .tool-btn.action:hover:not(:disabled) {
   border-color: var(--accent-primary);
+}
+
+.tool-btn.audit-btn {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+.tool-btn.audit-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: #34d399;
+}
+
+.workspace-presets {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-sm, 6px);
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.preset-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  opacity: 0.65;
+}
+.preset-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.preset-btn.active {
+  opacity: 1;
+  background: var(--accent-primary, #6366f1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .zoom-level {

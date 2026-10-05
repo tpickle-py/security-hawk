@@ -53,6 +53,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "nav_controls": "bottom-right",
         "toolbar": "top",
     },
+    "mcp": {
+        "enabled": True,
+        "access_level": "full_access",
+        "api_key": "",
+        "mask_sensitive_data": True,
+        "allowed_domains": ["camera", "binary_sensor", "sensor", "lock", "alarm_control_panel", "siren"],
+    },
 }
 
 

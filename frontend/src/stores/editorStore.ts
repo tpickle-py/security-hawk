@@ -23,6 +23,8 @@ export type ViewportPreset =
   | "tv"
   | "ultrawide";
 
+export type WorkspacePreset = "mapping" | "cad" | "zen";
+
 export interface ViewportConfig {
   id: ViewportPreset;
   label: string;
@@ -96,6 +98,40 @@ export const useEditorStore = defineStore("editor", () => {
   const activeTool = ref<EditorTool>("select");
   const selectedEndpointIds = ref<string[]>([]);
   const selectedShapeId = ref<string | null>(null);
+  const selectedSubAreaId = ref<string | null>(null);
+
+  // Dialog & Tool visibility
+  const showCadCommandBar = ref<boolean>(localStorage.getItem("sh_show_cad") !== "false");
+  const showRoomGridModal = ref<boolean>(false);
+  const showExportModal = ref<boolean>(false);
+  const showVersionModal = ref<boolean>(false);
+  const showCoverageAuditModal = ref<boolean>(false);
+
+  function toggleCadCommandBar() {
+    showCadCommandBar.value = !showCadCommandBar.value;
+    try {
+      localStorage.setItem("sh_show_cad", String(showCadCommandBar.value));
+    } catch {}
+  }
+
+  // Workspace Presets: 'mapping' | 'cad' | 'zen'
+  const activeWorkspacePreset = ref<WorkspacePreset>("mapping");
+
+  function setWorkspacePreset(preset: WorkspacePreset) {
+    activeWorkspacePreset.value = preset;
+    try {
+      localStorage.setItem("sh_workspace_preset", preset);
+    } catch {}
+
+    if (preset === "cad") {
+      showCadCommandBar.value = true;
+    } else if (preset === "zen") {
+      showCadCommandBar.value = false;
+    }
+
+    // Broadcast event for panels to adjust minimization/docking
+    window.dispatchEvent(new CustomEvent("sh-workspace-preset", { detail: { preset } }));
+  }
 
   // Viewport simulator
   const activeViewport = ref<ViewportPreset>("freeform");
@@ -156,6 +192,7 @@ export const useEditorStore = defineStore("editor", () => {
     if (m === "usage") {
       selectedEndpointIds.value = [];
       selectedShapeId.value = null;
+      selectedSubAreaId.value = null;
       activeTool.value = "select";
       drawingPoints.value = [];
     }
@@ -167,6 +204,7 @@ export const useEditorStore = defineStore("editor", () => {
     if (tool !== "select") {
       selectedEndpointIds.value = [];
       selectedShapeId.value = null;
+      selectedSubAreaId.value = null;
     }
     if (tool !== "scale") {
       scalePoint1.value = null;
@@ -181,6 +219,8 @@ export const useEditorStore = defineStore("editor", () => {
       return;
     }
     activeTool.value = "select";
+    selectedShapeId.value = null;
+    selectedSubAreaId.value = null;
     if (multi) {
       if (selectedEndpointIds.value.includes(id)) {
         selectedEndpointIds.value = selectedEndpointIds.value.filter((x) => x !== id);
@@ -193,6 +233,8 @@ export const useEditorStore = defineStore("editor", () => {
   }
 
   function selectAll(ids: string[]) {
+    selectedShapeId.value = null;
+    selectedSubAreaId.value = null;
     selectedEndpointIds.value = [...ids];
   }
 
@@ -234,6 +276,16 @@ export const useEditorStore = defineStore("editor", () => {
     selectedShapeId.value = id;
     if (id) {
       selectedEndpointIds.value = [];
+      selectedSubAreaId.value = null;
+      activeTool.value = "select";
+    }
+  }
+
+  function selectSubArea(id: string | null) {
+    selectedSubAreaId.value = id;
+    if (id) {
+      selectedEndpointIds.value = [];
+      selectedShapeId.value = null;
       activeTool.value = "select";
     }
   }
@@ -241,6 +293,7 @@ export const useEditorStore = defineStore("editor", () => {
   function clearSelection() {
     selectedEndpointIds.value = [];
     selectedShapeId.value = null;
+    selectedSubAreaId.value = null;
   }
 
   function cancelScaleCalibration() {
@@ -290,6 +343,15 @@ export const useEditorStore = defineStore("editor", () => {
     selectedEndpointIds,
     selectedEndpointId,
     selectedShapeId,
+    selectedSubAreaId,
+    showCadCommandBar,
+    showRoomGridModal,
+    showExportModal,
+    showVersionModal,
+    showCoverageAuditModal,
+    activeWorkspacePreset,
+    setWorkspacePreset,
+    toggleCadCommandBar,
     activeViewport,
     showViewportGuides,
     drawingPoints,
@@ -310,6 +372,7 @@ export const useEditorStore = defineStore("editor", () => {
     selectEndpoint,
     selectAll,
     selectShape,
+    selectSubArea,
     clearSelection,
     isEndpointSelected,
     resetView,

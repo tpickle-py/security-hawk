@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useEntityStore } from "@/stores/entityStore";
 import { usePlanStore } from "@/stores/planStore";
 import type { CompositeRule, HAEntity } from "@/types/plan";
 import { api } from "@/services/api";
 import RuleBuilderModal from "@/components/editor/RuleBuilderModal.vue";
+import SmartMatchModal from "@/components/editor/SmartMatchModal.vue";
+import { findSmartMatches } from "@/services/keywordMatcher";
 
 const entityStore = useEntityStore();
 const planStore = usePlanStore();
+
+const showSmartMatchModal = ref(false);
+const smartMatches = computed(() => {
+  return findSmartMatches(entityStore.unassignedEntities, entityStore.areas);
+});
 
 const query = ref("");
 const selectedDomain = ref("");
@@ -260,7 +267,105 @@ const filteredRules = computed(() => {
   );
 });
 
+// Docking, minimize, and free move state
+export type EntityDockMode = "left" | "right" | "float";
+const dockMode = ref<EntityDockMode>(getInitialEntityDock());
+const isMinimized = ref<boolean>(localStorage.getItem("sh_entities_min") === "true");
+const floatPos = ref<{ x: number; y: number }>(getInitialEntityPos());
+const isDraggingHeader = ref(false);
+
+function getInitialEntityDock(): EntityDockMode {
+  try {
+    const saved = localStorage.getItem("sh_entities_dock");
+    if (saved && ["left", "right", "float"].includes(saved)) {
+      return saved as EntityDockMode;
+    }
+  } catch {}
+  return "left";
+}
+
+function getInitialEntityPos(): { x: number; y: number } {
+  try {
+    const saved = localStorage.getItem("sh_entities_pos");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+        return parsed;
+      }
+    }
+  } catch {}
+  return { x: 24, y: 72 };
+}
+
+function setDockMode(mode: EntityDockMode) {
+  dockMode.value = mode;
+  try {
+    localStorage.setItem("sh_entities_dock", mode);
+  } catch {}
+}
+
+function cycleDockMode() {
+  const modes: EntityDockMode[] = ["left", "right", "float"];
+  const next = modes[(modes.indexOf(dockMode.value) + 1) % modes.length];
+  setDockMode(next);
+}
+
+function toggleMinimize() {
+  isMinimized.value = !isMinimized.value;
+  try {
+    localStorage.setItem("sh_entities_min", String(isMinimized.value));
+  } catch {}
+}
+
+function startHeaderDrag(e: MouseEvent) {
+  if (dockMode.value !== "float") {
+    // If dragged while docked, automatically undock to float at mouse position
+    setDockMode("float");
+    floatPos.value = {
+      x: Math.max(10, Math.min(window.innerWidth - 340, e.clientX - 160)),
+      y: Math.max(10, Math.min(window.innerHeight - 100, e.clientY - 20)),
+    };
+  }
+
+  isDraggingHeader.value = true;
+  const startClientX = e.clientX;
+  const startClientY = e.clientY;
+  const origX = floatPos.value.x;
+  const origY = floatPos.value.y;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    floatPos.value = {
+      x: Math.max(10, Math.min(window.innerWidth - 330, origX + (ev.clientX - startClientX))),
+      y: Math.max(10, Math.min(window.innerHeight - 80, origY + (ev.clientY - startClientY))),
+    };
+  };
+
+  const onMouseUp = () => {
+    isDraggingHeader.value = false;
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+    try {
+      localStorage.setItem("sh_entities_pos", JSON.stringify(floatPos.value));
+    } catch {}
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+}
+
+function onWorkspacePreset(e: Event) {
+  const detail = (e as CustomEvent).detail;
+  if (!detail) return;
+  if (detail.preset === "cad" || detail.preset === "zen") {
+    isMinimized.value = true;
+  } else if (detail.preset === "mapping") {
+    isMinimized.value = false;
+    setDockMode("left");
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("sh-workspace-preset", onWorkspacePreset);
   await Promise.all([
     entityStore.loadSettingsIgnored(),
     entityStore.fetchKnownEntityIds(),
@@ -269,13 +374,60 @@ onMounted(async () => {
     fetchRules(),
   ]);
 });
+
+onUnmounted(() => {
+  window.removeEventListener("sh-workspace-preset", onWorkspacePreset);
+});
 </script>
 
 <template>
-  <aside class="entity-picker glass-panel">
-    <div class="picker-header">
-      <div class="header-title">Home Assistant Entities</div>
-      <div class="header-subtitle">Drag and drop to place on floor plan</div>
+  <!-- Minimized Floating Pill -->
+  <div
+    v-if="isMinimized"
+    :class="['entity-minimized-pill', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+    @mousedown="startHeaderDrag"
+    @click="toggleMinimize"
+    title="Click to restore Home Assistant Entities panel (drag to move)"
+  >
+    <span class="pill-icon">🏷️</span>
+    <span class="pill-text">Entities</span>
+    <span class="pill-badge" v-if="entityStore.unassignedCount > 0">{{ entityStore.unassignedCount }}</span>
+    <button class="pill-action-btn" @click.stop="cycleDockMode" :title="`Docked: ${dockMode.toUpperCase()}. Click to cycle.`">
+      ⚓
+    </button>
+    <button class="pill-action-btn" @click.stop="toggleMinimize" title="Expand panel">
+      ▲
+    </button>
+  </div>
+
+  <!-- Expanded Entities Panel -->
+  <aside
+    v-else
+    :class="['entity-picker', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+  >
+    <div class="picker-header" @mousedown="startHeaderDrag">
+      <div class="header-info">
+        <div class="header-title">Home Assistant Entities</div>
+        <div class="header-subtitle">Drag and drop to place on floor plan</div>
+      </div>
+      <div class="panel-header-actions" @mousedown.stop>
+        <button
+          class="panel-tool-btn"
+          :title="`Dock: ${dockMode.toUpperCase()}. Click to cycle (Left, Right, Float)`"
+          @click="cycleDockMode"
+        >
+          ⚓ {{ dockMode.toUpperCase() }}
+        </button>
+        <button
+          class="panel-tool-btn"
+          title="Minimize panel into floating pill"
+          @click="toggleMinimize"
+        >
+          ─
+        </button>
+      </div>
     </div>
 
     <!-- Quick Tabs: All vs Unassigned Rooms vs Rules -->
@@ -556,6 +708,27 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- Smart Match Action Banner (Unassigned Tab) -->
+    <div
+      v-if="activeTab === 'unassigned' && smartMatches.length > 0"
+      class="smart-match-banner"
+    >
+      <div class="banner-text">
+        <span class="banner-sparkle">🪄</span>
+        <div class="banner-details">
+          <span class="banner-title">Smart Match Found</span>
+          <span class="banner-sub">{{ smartMatches.length }} unassigned entit{{ smartMatches.length === 1 ? 'y' : 'ies' }} match room names</span>
+        </div>
+      </div>
+      <button
+        class="btn-smart-match"
+        @click="showSmartMatchModal = true"
+        title="Review and batch-assign matching rooms"
+      >
+        Auto-Assign
+      </button>
+    </div>
+
     <!-- ENTITY LIST (HA Physical Entities) -->
     <div v-else class="entity-list">
       <div v-if="entityStore.isLoading" class="list-state">Loading entities...</div>
@@ -658,6 +831,13 @@ onMounted(async () => {
       @saved="fetchRules"
     />
 
+    <!-- Smart Match Modal Component -->
+    <SmartMatchModal
+      :show="showSmartMatchModal"
+      :matches="smartMatches"
+      @close="showSmartMatchModal = false"
+    />
+
     <!-- Bulk Hide Domain Modal -->
     <div
       v-if="showBulkHideModal"
@@ -756,10 +936,128 @@ onMounted(async () => {
   flex-direction: column;
   overflow: hidden;
   z-index: 100;
+  transition: box-shadow 0.2s ease;
+}
+
+.entity-picker.dock-right {
+  order: 3;
+}
+
+.entity-picker.dock-float {
+  position: fixed;
+  height: 560px;
+  max-height: calc(100vh - 100px);
+  z-index: 170;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  margin: 0;
+}
+
+/* Minimized Floating Pill */
+.entity-minimized-pill {
+  position: fixed;
+  z-index: 175;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-full, 24px);
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.entity-minimized-pill.dock-left {
+  left: 20px;
+  top: 72px;
+}
+
+.entity-minimized-pill.dock-right {
+  right: 20px;
+  top: 72px;
+}
+
+.entity-minimized-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.pill-icon {
+  font-size: 14px;
+}
+
+.pill-text {
+  font-size: 12px;
+}
+
+.pill-badge {
+  background: var(--accent-primary, #6366f1);
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.pill-action-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-secondary);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.pill-action-btn:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
 }
 
 .picker-header {
-  padding: 14px 16px 8px;
+  padding: 12px 14px 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+}
+
+.header-info {
+  flex: 1;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+}
+
+.panel-tool-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.panel-tool-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #ffffff;
 }
 
 .header-title {
@@ -781,6 +1079,70 @@ onMounted(async () => {
   padding: 3px;
   border-radius: var(--radius-sm);
   gap: 4px;
+}
+
+.smart-match-banner {
+  margin: 0 16px 10px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.12) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.banner-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.banner-sparkle {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.banner-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.banner-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5b4fc;
+}
+
+.banner-sub {
+  font-size: 10px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-smart-match {
+  background: #6366f1;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn-smart-match:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
 }
 
 .tab-btn {

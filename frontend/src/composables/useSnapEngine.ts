@@ -8,6 +8,16 @@ export interface SnapResult {
   targetPoint?: { x: number; y: number };
 }
 
+export interface AlignmentGuide {
+  id: string;
+  type: "x" | "y";
+  pos: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 export function useSnapEngine() {
   const SNAP_DISTANCE = 14; // pixels in SVG coordinates
   const GRID_SIZE = 20;
@@ -173,6 +183,89 @@ export function useSnapEngine() {
     };
   }
 
+  /**
+   * Find alignment guides and magnetic snapping coordinates against adjacent boxes.
+   */
+  function findSmartAlignment(
+    dragBox: { x: number; y: number; width: number; height: number },
+    targetBoxes: Array<{ x: number; y: number; width: number; height: number }>,
+    threshold = 10
+  ): {
+    snappedX: number;
+    snappedY: number;
+    guides: AlignmentGuide[];
+  } {
+    let snappedX = dragBox.x;
+    let snappedY = dragBox.y;
+    const guides: AlignmentGuide[] = [];
+
+    const dragXEdges = [
+      { pos: dragBox.x, offset: 0 },
+      { pos: dragBox.x + dragBox.width / 2, offset: dragBox.width / 2 },
+      { pos: dragBox.x + dragBox.width, offset: dragBox.width },
+    ];
+
+    const dragYEdges = [
+      { pos: dragBox.y, offset: 0 },
+      { pos: dragBox.y + dragBox.height / 2, offset: dragBox.height / 2 },
+      { pos: dragBox.y + dragBox.height, offset: dragBox.height },
+    ];
+
+    let bestDistX = threshold;
+    let bestDistY = threshold;
+
+    for (const target of targetBoxes) {
+      const targetXValues = [target.x, target.x + target.width / 2, target.x + target.width];
+      const targetYValues = [target.y, target.y + target.height / 2, target.y + target.height];
+
+      // X alignment (vertical guide line)
+      for (const dEdge of dragXEdges) {
+        for (const tVal of targetXValues) {
+          const diff = Math.abs(dEdge.pos - tVal);
+          if (diff < bestDistX) {
+            bestDistX = diff;
+            snappedX = tVal - dEdge.offset;
+            guides.push({
+              id: `guide-x-${tVal}`,
+              type: "x",
+              pos: tVal,
+              x1: tVal,
+              y1: Math.min(dragBox.y, target.y) - 60,
+              x2: tVal,
+              y2: Math.max(dragBox.y + dragBox.height, target.y + target.height) + 60,
+            });
+          }
+        }
+      }
+
+      // Y alignment (horizontal guide line)
+      for (const dEdge of dragYEdges) {
+        for (const tVal of targetYValues) {
+          const diff = Math.abs(dEdge.pos - tVal);
+          if (diff < bestDistY) {
+            bestDistY = diff;
+            snappedY = tVal - dEdge.offset;
+            guides.push({
+              id: `guide-y-${tVal}`,
+              type: "y",
+              pos: tVal,
+              x1: Math.min(dragBox.x, target.x) - 60,
+              y1: tVal,
+              x2: Math.max(dragBox.x + dragBox.width, target.x + target.width) + 60,
+              y2: tVal,
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      snappedX: Math.round(snappedX),
+      snappedY: Math.round(snappedY),
+      guides: guides.slice(-2),
+    };
+  }
+
   return {
     SNAP_DISTANCE,
     GRID_SIZE,
@@ -181,5 +274,6 @@ export function useSnapEngine() {
     snapToGrid,
     snapAngle,
     snapCoordinate,
+    findSmartAlignment,
   };
 }

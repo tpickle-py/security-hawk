@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useEditorStore } from "@/stores/editorStore";
 import { usePlanStore } from "@/stores/planStore";
 import { useEntityStore } from "@/stores/entityStore";
@@ -352,17 +352,157 @@ function updateCoverageAngle(e: Event) {
     coverage: { ...currentCoverage, angle },
   });
 }
+
+// Docking, minimize, and free move state
+export type PropsDockMode = "right" | "left" | "float";
+const dockMode = ref<PropsDockMode>(getInitialPropsDock());
+const isMinimized = ref<boolean>(localStorage.getItem("sh_props_min") === "true");
+const floatPos = ref<{ x: number; y: number }>(getInitialPropsPos());
+const isDraggingHeader = ref(false);
+
+function getInitialPropsDock(): PropsDockMode {
+  try {
+    const saved = localStorage.getItem("sh_props_dock");
+    if (saved && ["right", "left", "float"].includes(saved)) {
+      return saved as PropsDockMode;
+    }
+  } catch {}
+  return "right";
+}
+
+function getInitialPropsPos(): { x: number; y: number } {
+  try {
+    const saved = localStorage.getItem("sh_props_pos");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+        return parsed;
+      }
+    }
+  } catch {}
+  return { x: typeof window !== "undefined" ? Math.max(20, window.innerWidth - 320) : 1000, y: 72 };
+}
+
+function setDockMode(mode: PropsDockMode) {
+  dockMode.value = mode;
+  try {
+    localStorage.setItem("sh_props_dock", mode);
+  } catch {}
+}
+
+function cycleDockMode() {
+  const modes: PropsDockMode[] = ["right", "left", "float"];
+  const next = modes[(modes.indexOf(dockMode.value) + 1) % modes.length];
+  setDockMode(next);
+}
+
+function toggleMinimize() {
+  isMinimized.value = !isMinimized.value;
+  try {
+    localStorage.setItem("sh_props_min", String(isMinimized.value));
+  } catch {}
+}
+
+function startHeaderDrag(e: MouseEvent) {
+  if (dockMode.value !== "float") {
+    setDockMode("float");
+    floatPos.value = {
+      x: Math.max(10, Math.min(window.innerWidth - 310, e.clientX - 150)),
+      y: Math.max(10, Math.min(window.innerHeight - 100, e.clientY - 20)),
+    };
+  }
+
+  isDraggingHeader.value = true;
+  const startClientX = e.clientX;
+  const startClientY = e.clientY;
+  const origX = floatPos.value.x;
+  const origY = floatPos.value.y;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    floatPos.value = {
+      x: Math.max(10, Math.min(window.innerWidth - 310, origX + (ev.clientX - startClientX))),
+      y: Math.max(10, Math.min(window.innerHeight - 80, origY + (ev.clientY - startClientY))),
+    };
+  };
+
+  const onMouseUp = () => {
+    isDraggingHeader.value = false;
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+    try {
+      localStorage.setItem("sh_props_pos", JSON.stringify(floatPos.value));
+    } catch {}
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+}
+
+function onWorkspacePreset(e: Event) {
+  const detail = (e as CustomEvent).detail;
+  if (!detail) return;
+  if (detail.preset === "cad" || detail.preset === "zen") {
+    isMinimized.value = true;
+  } else if (detail.preset === "mapping") {
+    isMinimized.value = false;
+    setDockMode("right");
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("sh-workspace-preset", onWorkspacePreset);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("sh-workspace-preset", onWorkspacePreset);
+});
 </script>
 
 <template>
+  <!-- Minimized Floating Pill -->
+  <div
+    v-if="isMinimized"
+    :class="['props-minimized-pill', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+    @mousedown="startHeaderDrag"
+    @click="toggleMinimize"
+    title="Click to restore Properties & Floor Areas panel (drag to move)"
+  >
+    <span class="pill-icon">📐</span>
+    <span class="pill-text">Properties & Zones</span>
+    <span class="pill-badge" v-if="editorStore.selectedEndpointIds.length > 0">
+      {{ editorStore.selectedEndpointIds.length }}
+    </span>
+    <button class="pill-action-btn" @click.stop="cycleDockMode" :title="`Docked: ${dockMode.toUpperCase()}. Click to cycle.`">
+      ⚓
+    </button>
+    <button class="pill-action-btn" @click.stop="toggleMinimize" title="Expand panel">
+      ▲
+    </button>
+  </div>
+
   <!-- Multi-Selection Mode -->
-  <aside v-if="isMultiSelect" class="property-panel glass-panel">
-    <div class="panel-header">
+  <aside
+    v-else-if="isMultiSelect"
+    :class="['property-panel', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+  >
+    <div class="panel-header" @mousedown="startHeaderDrag">
       <div class="header-title">
         <span>Selection</span>
         <span class="count-badge">{{ editorStore.selectedEndpointIds.length }} items</span>
       </div>
-      <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+      <div class="panel-header-actions" @mousedown.stop>
+        <button
+          class="panel-tool-btn"
+          :title="`Dock: ${dockMode.toUpperCase()}. Click to cycle (Right, Left, Float)`"
+          @click="cycleDockMode"
+        >
+          ⚓ {{ dockMode.toUpperCase() }}
+        </button>
+        <button class="panel-tool-btn" title="Minimize panel" @click="toggleMinimize">─</button>
+        <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+      </div>
     </div>
 
     <div class="panel-body">
@@ -406,10 +546,24 @@ function updateCoverageAngle(e: Event) {
   </aside>
 
   <!-- Single Endpoint Selected -->
-  <aside v-else-if="selectedEndpoint" class="property-panel glass-panel">
-    <div class="panel-header">
+  <aside
+    v-else-if="selectedEndpoint"
+    :class="['property-panel', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+  >
+    <div class="panel-header" @mousedown="startHeaderDrag">
       <div class="header-title">Endpoint Properties</div>
-      <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+      <div class="panel-header-actions" @mousedown.stop>
+        <button
+          class="panel-tool-btn"
+          :title="`Dock: ${dockMode.toUpperCase()}. Click to cycle (Right, Left, Float)`"
+          @click="cycleDockMode"
+        >
+          ⚓ {{ dockMode.toUpperCase() }}
+        </button>
+        <button class="panel-tool-btn" title="Minimize panel" @click="toggleMinimize">─</button>
+        <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+      </div>
     </div>
 
     <div class="panel-body">
@@ -673,10 +827,24 @@ function updateCoverageAngle(e: Event) {
   </aside>
 
   <!-- Single Shape Selected (Wall, Room, Label) -->
-  <aside v-else-if="selectedShape" class="property-panel glass-panel">
-    <div class="panel-header">
+  <aside
+    v-else-if="selectedShape"
+    :class="['property-panel', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+  >
+    <div class="panel-header" @mousedown="startHeaderDrag">
       <div class="header-title">{{ selectedShape.type.toUpperCase() }} Properties</div>
-      <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+      <div class="panel-header-actions" @mousedown.stop>
+        <button
+          class="panel-tool-btn"
+          :title="`Dock: ${dockMode.toUpperCase()}. Click to cycle (Right, Left, Float)`"
+          @click="cycleDockMode"
+        >
+          ⚓ {{ dockMode.toUpperCase() }}
+        </button>
+        <button class="panel-tool-btn" title="Minimize panel" @click="toggleMinimize">─</button>
+        <button class="close-btn" @click="editorStore.clearSelection()">×</button>
+      </div>
     </div>
 
     <div class="panel-body">
@@ -756,9 +924,23 @@ function updateCoverageAngle(e: Event) {
   </aside>
 
   <!-- Default Floor / Sub-Area Management Panel -->
-  <aside v-else class="property-panel glass-panel">
-    <div class="panel-header">
+  <aside
+    v-else
+    :class="['property-panel', 'glass-panel', `dock-${dockMode}`]"
+    :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
+  >
+    <div class="panel-header" @mousedown="startHeaderDrag">
       <div class="header-title">Floor Areas & Zones</div>
+      <div class="panel-header-actions" @mousedown.stop>
+        <button
+          class="panel-tool-btn"
+          :title="`Dock: ${dockMode.toUpperCase()}. Click to cycle (Right, Left, Float)`"
+          @click="cycleDockMode"
+        >
+          ⚓ {{ dockMode.toUpperCase() }}
+        </button>
+        <button class="panel-tool-btn" title="Minimize panel" @click="toggleMinimize">─</button>
+      </div>
     </div>
 
     <div class="panel-body">
@@ -821,14 +1003,124 @@ function updateCoverageAngle(e: Event) {
   flex-direction: column;
   z-index: 100;
   overflow-y: auto;
+  transition: box-shadow 0.2s ease;
+}
+
+.property-panel.dock-left {
+  order: 1;
+}
+
+.property-panel.dock-float {
+  position: fixed;
+  height: 560px;
+  max-height: calc(100vh - 100px);
+  z-index: 170;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  margin: 0;
+}
+
+/* Minimized Floating Pill */
+.props-minimized-pill {
+  position: fixed;
+  z-index: 175;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-full, 24px);
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.props-minimized-pill.dock-right {
+  right: 20px;
+  top: 72px;
+}
+
+.props-minimized-pill.dock-left {
+  left: 20px;
+  top: 72px;
+}
+
+.props-minimized-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.pill-icon {
+  font-size: 14px;
+}
+
+.pill-text {
+  font-size: 12px;
+}
+
+.pill-badge {
+  background: var(--accent-primary, #6366f1);
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.pill-action-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-secondary);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.pill-action-btn:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
 }
 
 .panel-header {
-  padding: 16px 16px 12px;
+  padding: 12px 14px 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
+  cursor: grab;
+  user-select: none;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.panel-tool-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.panel-tool-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #ffffff;
 }
 
 .header-title {

@@ -86,7 +86,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="modal-backdrop" @click.self="emit('close')">
+  <Teleport to="body">
+    <div class="modal-backdrop" @click.self="emit('close')">
     <div class="version-modal glass-panel">
       <div class="modal-header">
         <div class="header-info">
@@ -130,6 +131,7 @@ onMounted(() => {
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <style scoped>

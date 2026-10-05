@@ -25,9 +25,16 @@
 - **Design Mode & Canvas**:
   - **Background Upload**: Upload architectural floor plans (sanitized SVGs, PNG, JPEG, WebP).
   - **Scale Calibration**: Two-point real-world scale calibration in metres.
+  - **Interactive Room & Zone Movement & 8-Handle Resizing**: Select rooms or sub-areas and move them freely or resize dynamically using 8 cardinal bounding box handles (`NW`, `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`).
+  - **AutoCAD Command Line Bar**: CAD-style keyboard terminal (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, etc.) with autocomplete suggestions, command history, and a dockable / collapsible helper reference drawer.
+  - **Right-Click Context Menu**: Contextual right-click popup menu on canvas, endpoints, rooms, and walls providing instant property inspection, 90° rotations, duplication, area reassignment, cutout creation, and deletion.
   - **Box & Marquee Drag Selection**: Drag across empty canvas to select multiple entities at once, with `Shift` modifier support.
   - **Synchronized Multi-Move**: Drag any selected endpoint to move the entire selection across the canvas simultaneously.
   - **Version History**: Rolling 20-save version history with one-click restore.
+- **Dockable & Minimizable Panels**:
+  - **Home Assistant Entities Panel**: Dock to Left, Right, or Floating mode with draggable header bar, saved coordinates, and one-click minimize to a floating pill badge (`🏷️ Entities (N)`).
+  - **Floor Areas & Zones / Property Panel**: Dock to Right, Left, or Floating mode with draggable header bar, saved coordinates, and one-click minimize to a floating pill badge (`📐 Properties & Zones`).
+  - **Persistent Positions**: Floating coordinates and dock locations persist in `localStorage` with a reset option in Settings.
 - **Nested Areas & Entities**:
   - **Area within an Area (Sub-Areas / Zones)**: Define custom room zones and nested sub-areas (e.g. Walk-in Closet inside Master Bedroom) assigned to parent Home Assistant rooms.
   - **Entity within an Entity (Nested Endpoints)**: Attach sensors directly to other endpoints (e.g. vibration sensor attached to a door, or multi-sensor attached to a camera).
@@ -37,10 +44,15 @@
   - **Doors**: Distinct closed state (frame and door leaf) vs open state (amber warning glow with 90° dotted swing arc).
   - **Windows**: Distinct closed state (4-pane sash) vs open state (slid-open sash with air draft chevrons and warning glow).
   - **Quick Rotation**: 90° clockwise/counter-clockwise step buttons and 360° precision slider.
-- **Room & Area Designation**:
+- **Room & Area Designation & Unassigned Tracking**:
   - Automatic discovery of all Home Assistant rooms and areas (`config/area_registry/list`).
+  - Real-time unassigned entity counts and area breakdowns that immediately update when entities or entire domains are hidden/ignored.
   - Highlights unassigned entities with instant room designation directly inside the picker.
-  - Filter entities by room or unassigned status.
+  - Filter entities by room, unassigned status, or hidden/ignored entities.
+- **Model Context Protocol (MCP) AI Tools Server**:
+  - Native JSON-RPC 2.0 and REST MCP endpoint (`/api/mcp/`) enabling external AI agents (Claude Desktop, cursor, custom tools) to interact with Security Hawk.
+  - Query floor plans, detect coverage gaps, suggest sensor placements, and programmatically generate rooms, walls, and compound security rules.
+  - Granular access controls (`read_only`, `design_only`, `rules_only`, `full_access`, `disabled`), optional API key protection, and automatic sensitive data redaction (IPs, credentials, tokens).
 - **Friendly Name & Entity Search**:
   - Full-text search matching Home Assistant friendly names, room/area names, and entity IDs.
   - Friendly names displayed prominently across design, inspector, and live views.

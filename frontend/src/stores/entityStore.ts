@@ -158,11 +158,21 @@ export const useEntityStore = defineStore("entity", () => {
     } catch {
       // Ignored setting sync fallback
     }
+    // Refresh area entity counts and unassigned entity counts
+    await fetchAreas();
+    if (filterUnassignedOnly.value) {
+      await fetchEntities();
+    }
   }
 
   async function ignoreEntity(entityId: string) {
     if (!ignoredEntityIds.value.includes(entityId)) {
       ignoredEntityIds.value.push(entityId);
+      // Optimistically decrement unassigned count if unassigned
+      const ent = entities.value.find((e) => e.entity_id === entityId);
+      if (ent && !ent.area_id && unassignedCount.value > 0) {
+        unassignedCount.value--;
+      }
       await saveIgnoredState();
     }
   }
@@ -171,6 +181,10 @@ export const useEntityStore = defineStore("entity", () => {
     const idx = ignoredEntityIds.value.indexOf(entityId);
     if (idx !== -1) {
       ignoredEntityIds.value.splice(idx, 1);
+      const ent = entities.value.find((e) => e.entity_id === entityId);
+      if (ent && !ent.area_id) {
+        unassignedCount.value++;
+      }
       await saveIgnoredState();
     }
   }
@@ -178,6 +192,12 @@ export const useEntityStore = defineStore("entity", () => {
   async function ignoreDomain(domain: string) {
     if (!ignoredDomains.value.includes(domain)) {
       ignoredDomains.value.push(domain);
+      const count = entities.value.filter(
+        (e) => !e.area_id && (e.domain === domain || e.entity_id.startsWith(`${domain}.`))
+      ).length;
+      if (count > 0) {
+        unassignedCount.value = Math.max(0, unassignedCount.value - count);
+      }
       await saveIgnoredState();
     }
   }
@@ -194,6 +214,12 @@ export const useEntityStore = defineStore("entity", () => {
     const idx = ignoredDomains.value.indexOf(domain);
     if (idx === -1) {
       ignoredDomains.value.push(domain);
+      const count = entities.value.filter(
+        (e) => !e.area_id && (e.domain === domain || e.entity_id.startsWith(`${domain}.`))
+      ).length;
+      if (count > 0) {
+        unassignedCount.value = Math.max(0, unassignedCount.value - count);
+      }
     } else {
       ignoredDomains.value.splice(idx, 1);
     }
