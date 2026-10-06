@@ -44,6 +44,11 @@ export interface Endpoint {
   coverage: Coverage | null;
   stale_after: string | null;
   parent_id?: string | null; // Nested entity (attached to another endpoint)
+  attached_to?: {
+    shapeId: string;
+    type: 'wall' | 'room' | 'door' | 'window';
+    openingId?: string;
+  } | null;
   group_id?: string | null; // Grouped unit ID
   group_name?: string | null; // Grouped unit name (e.g. "Front Entrance Suite")
 }
@@ -80,6 +85,7 @@ export interface WallGeometry {
 export interface RoomGeometry {
   points: Array<[number, number]>;
   name?: string;
+  edgeOpenings?: Record<number, WallOpening[]>; // Key is the edge index
 }
 
 export interface LabelGeometry {

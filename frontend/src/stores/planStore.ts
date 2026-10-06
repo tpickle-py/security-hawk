@@ -491,10 +491,43 @@ export const usePlanStore = defineStore("plan", () => {
       const geom = wall.geometry as WallGeometry;
       if (!geom.openings) geom.openings = [];
       geom.openings.push(opening);
+      geom.openings = [...geom.openings];
+      console.log("[SH_DEBUG] addWallOpening success", geom.openings);
       markDirtyAndAutosave();
     }
   }
 
+  function addRoomEdgeOpening(roomId: string, edgeIndex: number, opening: WallOpening) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const room = list.find((s) => s.id === roomId && s.type === "room");
+    if (room) {
+      snapshotBeforeMutation();
+      const geom = room.geometry as RoomGeometry;
+      if (!geom.edgeOpenings) geom.edgeOpenings = {};
+      if (!geom.edgeOpenings[edgeIndex]) geom.edgeOpenings[edgeIndex] = [];
+      geom.edgeOpenings[edgeIndex].push(opening);
+      markDirtyAndAutosave();
+    }
+  }
+
+  function removeRoomEdgeOpening(roomId: string, edgeIndex: number, openingId: string) {
+    if (!site.value) return;
+    const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
+    if (!list) return;
+
+    const room = list.find((s) => s.id === roomId && s.type === "room");
+    if (room) {
+      snapshotBeforeMutation();
+      const geom = room.geometry as RoomGeometry;
+      if (geom.edgeOpenings && geom.edgeOpenings[edgeIndex]) {
+        geom.edgeOpenings[edgeIndex] = geom.edgeOpenings[edgeIndex].filter((op) => op.id !== openingId);
+        markDirtyAndAutosave();
+      }
+    }
+  }
   function removeWallOpening(wallId: string, openingId: string) {
     if (!site.value) return;
     const list = isOverview.value ? (site.value.overview.shapes as Shape[]) : currentFloor.value?.shapes;
@@ -729,6 +762,8 @@ export const usePlanStore = defineStore("plan", () => {
     removeShape,
     addWallOpening,
     removeWallOpening,
+    addRoomEdgeOpening,
+    removeRoomEdgeOpening,
     addRoomsGrid,
     performUndo,
     performRedo,

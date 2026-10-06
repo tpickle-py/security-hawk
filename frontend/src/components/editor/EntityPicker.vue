@@ -376,26 +376,31 @@ function toggleMinimize() {
 }
 
 function startHeaderDrag(e: MouseEvent) {
-  if (dockMode.value !== "float") {
-    // If dragged while docked, automatically undock to float at mouse position
-    setDockMode("float");
-    floatPos.value = {
-      x: Math.max(10, Math.min(window.innerWidth - 340, e.clientX - 160)),
-      y: Math.max(10, Math.min(window.innerHeight - 100, e.clientY - 20)),
-    };
-  }
-
   isDraggingHeader.value = true;
   const startClientX = e.clientX;
   const startClientY = e.clientY;
-  const origX = floatPos.value.x;
-  const origY = floatPos.value.y;
+  const origDockMode = dockMode.value;
+  let origX = floatPos.value.x;
+  let origY = floatPos.value.y;
+  let hasMoved = false;
 
   const onMouseMove = (ev: MouseEvent) => {
-    floatPos.value = {
-      x: Math.max(10, Math.min(window.innerWidth - 330, origX + (ev.clientX - startClientX))),
-      y: Math.max(10, Math.min(window.innerHeight - 80, origY + (ev.clientY - startClientY))),
-    };
+    const dx = ev.clientX - startClientX;
+    const dy = ev.clientY - startClientY;
+    if (!hasMoved && Math.hypot(dx, dy) > 3) {
+      hasMoved = true;
+      if (origDockMode !== "float") {
+        setDockMode("float");
+        origX = Math.max(10, Math.min(window.innerWidth - 340, startClientX - 160));
+        origY = Math.max(10, Math.min(window.innerHeight - 100, startClientY - 20));
+      }
+    }
+    if (hasMoved || origDockMode === "float") {
+      floatPos.value = {
+        x: Math.max(10, Math.min(window.innerWidth - 330, origX + dx)),
+        y: Math.max(10, Math.min(window.innerHeight - 80, origY + dy)),
+      };
+    }
   };
 
   const onMouseUp = () => {

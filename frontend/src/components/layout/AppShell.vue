@@ -81,6 +81,7 @@ async function handleSwitchPlan(e: Event) {
 }
 
 onMounted(() => {
+  editorStore.setWorkspacePreset("mapping");
   loadPlans();
 });
 </script>

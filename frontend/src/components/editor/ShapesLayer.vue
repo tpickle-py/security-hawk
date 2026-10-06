@@ -11,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "select-shape", shapeId: string): void;
   (e: "wall-click", wallId: string, clickPoint: { x: number; y: number }, event?: MouseEvent): void;
+  (e: "room-edge-click", shapeId: string, edgeIndex: number, clickPoint: { x: number; y: number }, event?: MouseEvent): void;
   (e: "room-drag-start", shape: Shape, event: MouseEvent): void;
   (e: "shape-contextmenu", shape: Shape, event: MouseEvent): void;
   (e: "room-dblclick", shape: Shape, event: MouseEvent): void;
@@ -129,9 +130,45 @@ function processWallGeometry(geom: WallGeometry) {
 }
 
 function handleWallClick(shape: Shape, e: MouseEvent) {
+  console.log(`[SH_DEBUG] ShapesLayer handleWallClick shapeId=${shape.id}`);
   if (editorStore.activeTool === "door" || editorStore.activeTool === "window") {
     e.stopPropagation();
     emit("wall-click", shape.id, { x: props.cursorPoint?.x || 0, y: props.cursorPoint?.y || 0 }, e);
+    return;
+  }
+  emit("select-shape", shape.id);
+}
+
+function getRoomEdges(geom: RoomGeometry) {
+  const edges = [];
+  const pts = geom.points;
+  if (!pts || pts.length < 2) return [];
+  for (let i = 0; i < pts.length; i++) {
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % pts.length];
+    const edgeOpenings = geom.edgeOpenings?.[i] || [];
+    const wallGeom: WallGeometry = {
+      x1: p1[0],
+      y1: p1[1],
+      x2: p2[0],
+      y2: p2[1],
+      thickness: 1.5,
+      openings: edgeOpenings
+    };
+    edges.push({
+      index: i,
+      geom: wallGeom,
+      processed: processWallGeometry(wallGeom)
+    });
+  }
+  return edges;
+}
+
+function handleRoomEdgeClick(shape: Shape, edgeIndex: number, e: MouseEvent) {
+  console.log(`[SH_DEBUG] ShapesLayer handleRoomEdgeClick shapeId=${shape.id} edgeIndex=${edgeIndex}`);
+  if (editorStore.activeTool === "door" || editorStore.activeTool === "window") {
+    e.stopPropagation();
+    emit("room-edge-click", shape.id, edgeIndex, { x: props.cursorPoint?.x || 0, y: props.cursorPoint?.y || 0 }, e);
     return;
   }
   emit("select-shape", shape.id);
@@ -153,10 +190,65 @@ function handleWallClick(shape: Shape, e: MouseEvent) {
           <polygon
             :points="getPolygonPoints(shape.geometry as RoomGeometry)"
             :fill="(shape.style?.fill as string) || 'rgba(99, 102, 241, 0.12)'"
-            :stroke="(shape.style?.stroke as string) || '#6366f1'"
-            :stroke-width="editorStore.selectedShapeId === shape.id ? 2.5 : 1.5"
-            :class="{ selected: editorStore.selectedShapeId === shape.id }"
+            stroke="none"
           />
+          <!-- Render Room Edges like Walls -->
+          <g v-for="edge in getRoomEdges(shape.geometry as RoomGeometry)" :key="edge.index">
+            <line
+              v-for="(seg, i) in edge.processed.segments"
+              :key="i"
+              :x1="seg.x1"
+              :y1="seg.y1"
+              :x2="seg.x2"
+              :y2="seg.y2"
+              :stroke="(shape.style?.stroke as string) || '#6366f1'"
+              :stroke-width="editorStore.selectedShapeId === shape.id ? 2.5 : 1.5"
+            />
+            <!-- Edge Hitbox -->
+            <line
+              :x1="edge.geom.x1"
+              :y1="edge.geom.y1"
+              :x2="edge.geom.x2"
+              :y2="edge.geom.y2"
+              stroke="transparent"
+              stroke-width="12"
+              class="wall-hitbox"
+              @mousedown.stop="handleRoomEdgeClick(shape, edge.index, $event)"
+            />
+            <!-- Openings on this edge -->
+            <g class="openings-group">
+              <g
+                v-for="op in edge.processed.openingsList"
+                :key="op.id"
+                :transform="`translate(${op.x}, ${op.y}) rotate(${op.angleDeg})`"
+                @contextmenu.prevent.stop="emit('shape-contextmenu', { ...shape, openingId: op.id, edgeIndex: edge.index } as any, $event)"
+              >
+                <template v-if="op.type === 'door'">
+                  <path
+                    :d="`M ${-op.width / 2} 0 A ${op.width} ${op.width} 0 0 1 ${-op.width / 2 + op.width * 0.707} ${-op.width * 0.707}`"
+                    fill="none"
+                    stroke="#6366f1"
+                    stroke-width="1.2"
+                    stroke-dasharray="3 3"
+                  />
+                  <line
+                    :x1="-op.width / 2"
+                    y1="0"
+                    :x2="-op.width / 2 + op.width * 0.707"
+                    :y2="-op.width * 0.707"
+                    stroke="#818cf8"
+                    stroke-width="2.5"
+                  />
+                </template>
+                <template v-else-if="op.type === 'window'">
+                  <line :x1="-op.width / 2" y1="0" :x2="op.width / 2" y2="0" stroke="#38bdf8" stroke-width="3" />
+                  <line :x1="-op.width / 2" y1="-4" :x2="-op.width / 2" y2="4" stroke="#38bdf8" stroke-width="2" />
+                  <line :x1="op.width / 2" y1="-4" :x2="op.width / 2" y2="4" stroke="#38bdf8" stroke-width="2" />
+                </template>
+              </g>
+            </g>
+          </g>
+
           <!-- Room Name Label -->
           <text
             v-if="(shape.geometry as RoomGeometry).name"
@@ -198,6 +290,7 @@ function handleWallClick(shape: Shape, e: MouseEvent) {
             v-for="op in processWallGeometry(shape.geometry as WallGeometry).openingsList"
             :key="op.id"
             :transform="`translate(${op.x}, ${op.y}) rotate(${op.angleDeg})`"
+            @contextmenu.prevent.stop="emit('shape-contextmenu', { ...shape, openingId: op.id } as any, $event)"
           >
             <!-- Door: leaf + swing arc -->
             <template v-if="op.type === 'door'">

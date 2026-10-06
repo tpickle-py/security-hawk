@@ -7,6 +7,7 @@ export interface MockDataOptions {
 
 export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
   // Ensure every test starts with clean local storage and default Mapping workspace
+  page.on("console", msg => console.log(`[BROWSER] ${msg.text()}`));
   await page.addInitScript(() => {
     try {
       localStorage.clear();
@@ -26,9 +27,9 @@ export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
         type: "wall",
         geometry: {
           x1: 100,
-          y1: 100,
+          y1: 50,
           x2: 500,
-          y2: 100,
+          y2: 50,
           thickness: 8,
           openings: [
             { id: "door_1", type: "door", offset: 150, width: 40, swing: "inward" },
@@ -77,7 +78,7 @@ export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
         entity_id: "camera.server_room_cam",
         type: "camera",
         label: "Server Cam",
-        x: 150,
+        x: 450,
         y: 150,
         rotation: 0,
         fov_beam_angle: 90,
@@ -88,7 +89,7 @@ export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
         entity_id: "binary_sensor.living_room_motion",
         type: "motion",
         label: "Living Room PIR",
-        x: 250,
+        x: 550,
         y: 200,
         rotation: 45,
       },
@@ -97,7 +98,7 @@ export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
         entity_id: "binary_sensor.front_door_contact",
         type: "door",
         label: "Front Door Sensor",
-        x: 350,
+        x: 650,
         y: 200,
         rotation: 0,
       },

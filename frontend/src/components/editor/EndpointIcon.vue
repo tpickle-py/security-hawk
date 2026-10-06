@@ -50,8 +50,8 @@ function handleMouseDown(e: MouseEvent) {
     :transform="`translate(${endpoint.x}, ${endpoint.y}) rotate(${endpoint.rotation || 0})`"
     @mousedown.stop="handleMouseDown"
   >
-    <!-- Dedicated round hit area for reliable selection -->
-    <circle cx="0" cy="0" r="18" fill="rgba(0,0,0,0.001)" pointer-events="all" class="endpoint-hitbox" />
+    <!-- Invisible round hit area for reliable selection -->
+    <circle cx="0" cy="0" r="18" fill="transparent" class="endpoint-hitbox" />
 
     <!-- Selection highlight circle -->
     <circle

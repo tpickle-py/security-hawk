@@ -285,6 +285,7 @@ function closeRoomPolygon() {
 }
 
 function handleWallClick(wallId: string, clickPoint: { x: number; y: number }, e?: MouseEvent) {
+  console.log(`[SH_DEBUG] handleWallClick wallId=${wallId} clickPoint=`, clickPoint);
   const wall = planStore.currentShapes.find((s) => s.id === wallId && s.type === "wall");
   if (!wall) return;
 
@@ -314,6 +315,80 @@ function handleWallClick(wallId: string, clickPoint: { x: number; y: number }, e
     offset,
     width: 36,
   });
+}
+
+function handleRoomEdgeClick(roomId: string, edgeIndex: number, clickPoint: { x: number; y: number }, e?: MouseEvent) {
+  console.log(`[SH_DEBUG] handleRoomEdgeClick roomId=${roomId} edgeIndex=${edgeIndex}`);
+  const room = planStore.currentShapes.find((s) => s.id === roomId && s.type === "room");
+  if (!room) return;
+
+  const geom = room.geometry as RoomGeometry;
+  if (!geom.points || geom.points.length < 2) return;
+
+  const p1 = geom.points[edgeIndex];
+  const p2 = geom.points[(edgeIndex + 1) % geom.points.length];
+  
+  const dx = p2[0] - p1[0];
+  const dy = p2[1] - p1[1];
+  const len = Math.hypot(dx, dy);
+  if (len < 30) return;
+
+  let actualPoint = clickPoint;
+  if (e) {
+    actualPoint = screenToSvg(e.clientX, e.clientY);
+  } else if (actualPoint.x === 0 && actualPoint.y === 0) {
+    actualPoint = { x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2 };
+  }
+
+  const ux = dx / len;
+  const uy = dy / len;
+  // Project click onto wall vector
+  const proj = (actualPoint.x - p1[0]) * ux + (actualPoint.y - p1[1]) * uy;
+  const offset = Math.max(10, Math.min(len - 45, Math.round(proj - 18)));
+
+  const opType = editorStore.activeTool === "window" ? "window" : "door";
+  planStore.addRoomEdgeOpening(roomId, edgeIndex, {
+    id: "op_" + Math.random().toString(36).substring(2, 9),
+    type: opType,
+    offset,
+    width: 36,
+  });
+}
+function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+  const l2 = (x1 - x2) ** 2 + (y1 - y2) ** 2;
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+function findAttachmentTarget(x: number, y: number) {
+  let closestTarget: { shapeId: string; type: 'wall' | 'room' | 'door' | 'window' } | null = null;
+  let minDist = 20;
+
+  for (const shape of planStore.currentShapes) {
+    if (shape.type === "wall") {
+      const geom = shape.geometry as any;
+      const dist = distToSegment(x, y, geom.x1, geom.y1, geom.x2, geom.y2);
+      if (dist < minDist) {
+        minDist = dist;
+        closestTarget = { shapeId: shape.id, type: "wall" };
+      }
+    } else if (shape.type === "room") {
+      const geom = shape.geometry as any;
+      const pts = geom.points || [];
+      for (let i = 0; i < pts.length; i++) {
+        const p1 = pts[i];
+        const p2 = pts[(i + 1) % pts.length];
+        const dist = distToSegment(x, y, p1[0], p1[1], p2[0], p2[1]);
+        if (dist < minDist) {
+          minDist = dist;
+          closestTarget = { shapeId: shape.id, type: "room" };
+        }
+      }
+    }
+  }
+  return closestTarget;
 }
 
 let dragMovementOccurred = false;
@@ -364,13 +439,15 @@ function handleEndpointDragStart(ep: Endpoint, e: MouseEvent) {
       dragMovementOccurred = true;
     }
 
-    // Move all selected endpoints smoothly in real time without snapshotting history on every frame
-    const updates = Array.from(initialEndpointPositions.value.entries()).map(([id, initialPos]) => ({
-      id,
-      x: initialPos.x + dx,
-      y: initialPos.y + dy,
-    }));
-    planStore.batchUpdateEndpoints(updates, false);
+    if (dragMovementOccurred) {
+      // Move all selected endpoints smoothly in real time without snapshotting history on every frame
+      const updates = Array.from(initialEndpointPositions.value.entries()).map(([id, initialPos]) => ({
+        id,
+        x: initialPos.x + dx,
+        y: initialPos.y + dy,
+      }));
+      planStore.batchUpdateEndpoints(updates, false);
+    }
   };
 
   const onDocMouseUp = () => {
@@ -380,6 +457,14 @@ function handleEndpointDragStart(ep: Endpoint, e: MouseEvent) {
     window.removeEventListener("mouseup", onDocMouseUp);
 
     if (dragMovementOccurred) {
+      // Check for snap/attachment on all selected endpoints
+      for (const epId of editorStore.selectedEndpointIds) {
+        const ep = planStore.currentEndpoints.find((e) => e.id === epId);
+        if (ep) {
+          const target = findAttachmentTarget(ep.x, ep.y);
+          planStore.updateEndpoint(ep.id, { attached_to: target || null });
+        }
+      }
       planStore.markDirtyAndAutosave();
     } else if (pendingSelectionEndpoint) {
       // User simply clicked one of the multiple selected items without dragging
@@ -416,7 +501,9 @@ function handleSubAreaDragStart(sa: SubArea, e: MouseEvent) {
     targetY = alignResult.snappedY;
     activeGuides.value = alignResult.guides;
 
-    planStore.updateSubArea(sa.id, { x: targetX, y: targetY }, false);
+    if (Math.hypot(cur.x - startSvg.x, cur.y - startSvg.y) > 2) {
+      planStore.updateSubArea(sa.id, { x: targetX, y: targetY }, false);
+    }
   };
 
   const onDocMouseUp = () => {
@@ -445,8 +532,10 @@ function handleRoomShapeDragStart(shape: Shape, e: MouseEvent) {
     const cur = screenToSvg(moveEvent.clientX, moveEvent.clientY);
     const dx = Math.round(cur.x - startSvg.x);
     const dy = Math.round(cur.y - startSvg.y);
-    const newPoints = origPoints.map(([px, py]) => [px + dx, py + dy] as [number, number]);
-    planStore.resizeRoomShape(shape.id, newPoints, false);
+    if (Math.hypot(dx, dy) > 2) {
+      const newPoints = origPoints.map(([px, py]) => [px + dx, py + dy] as [number, number]);
+      planStore.resizeRoomShape(shape.id, newPoints, false);
+    }
   };
 
   const onDocMouseUp = () => {
@@ -664,6 +753,10 @@ function handleContextMenuAction(actionName: string) {
         if ("entity_id" in target) {
           planStore.removeEndpoint(target.id);
           editorStore.clearSelection();
+        } else if ("openingId" in target && "edgeIndex" in target) {
+          planStore.removeRoomEdgeOpening(target.id, target.edgeIndex, target.openingId);
+        } else if ("openingId" in target) {
+          planStore.removeWallOpening(target.id, target.openingId);
         } else if ("type" in target && target.type) {
           planStore.removeShape(target.id);
           editorStore.clearSelection();
@@ -903,6 +996,7 @@ function onDrop(e: DragEvent) {
           :cursor-point="cursorPoint"
           @select-shape="editorStore.selectShape"
           @wall-click="handleWallClick"
+          @room-edge-click="handleRoomEdgeClick"
           @room-drag-start="handleRoomShapeDragStart"
           @room-dblclick="(shape) => startInlineRename('room', shape)"
           @shape-contextmenu="(shape, ev) => openContextMenu(ev, shape.type, shape)"
@@ -984,8 +1078,8 @@ function onDrop(e: DragEvent) {
             :endpoint="ep"
             :is-selected="editorStore.isEndpointSelected(ep.id)"
             :is-orphaned="isOrphaned(ep)"
-            @select="(ep, ev) => handleEndpointSelect(ep, ev)"
-            @drag-start="(ep, ev) => handleEndpointDragStart(ep, ev)"
+            @select="handleEndpointSelect"
+            @drag-start="handleEndpointDragStart"
             @contextmenu.prevent.stop="openContextMenu($event, 'endpoint', ep)"
           />
         </g>

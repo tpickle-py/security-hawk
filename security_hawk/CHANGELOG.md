@@ -2,6 +2,11 @@
 
 All notable changes to Security Hawk will be documented in this file.
 
+## [0.4.2] - 2026-10-06
+
+### Changed
+Fix e2e test suite for canvas drawing tools and svg interactivity
+
 ## [0.4.1] - 2026-10-05
 
 ### Added

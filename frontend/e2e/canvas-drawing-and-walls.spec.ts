@@ -19,9 +19,9 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     // Initial wall count
     const initialWalls = await page.locator(".wall-shape").count();
 
-    // Click canvas at two distinct points to draw a wall
-    await canvas.click({ position: { x: 600, y: 300 } });
-    await canvas.click({ position: { x: 800, y: 300 } });
+    // Click canvas at two distinct points to draw a wall (outside the room)
+    await canvas.click({ position: { x: 400, y: 600 } });
+    await canvas.click({ position: { x: 600, y: 600 } });
 
     // Verify a new wall shape was added
     const afterWalls = await page.locator(".wall-shape").count();
@@ -36,13 +36,18 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     // Initial openings count in default wall
     const initialDoors = await page.locator('.wall-shape path[stroke-dasharray="3 3"]').count();
 
-    // Click on the wall
+    // Click on the wall using dispatchEvent to bypass Playwright SVG hit testing flakiness
     const existingWall = page.locator(".wall-shape line").first();
-    await existingWall.click({ position: { x: 80, y: 4 }, force: true });
+    const box = await existingWall.boundingBox();
+    if (box) {
+      await existingWall.dispatchEvent("click", {
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      });
+    }
 
     // Verify door swing arc appears on the wall
-    const afterDoors = await page.locator('.wall-shape path[stroke-dasharray="3 3"]').count();
-    expect(afterDoors).toBeGreaterThanOrEqual(initialDoors);
+    await expect(page.locator('.wall-shape path[stroke-dasharray="3 3"]')).toHaveCount(initialDoors + 1);
   });
 
   test("Window cutout tool adds window opening onto wall", async ({ page }) => {
@@ -50,13 +55,19 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     const winBtn = page.locator('.toolbar button[title*="Window"]').first();
     await winBtn.click({ force: true });
 
-    // Click on wall to place window
+    // Click on wall using dispatchEvent to bypass Playwright SVG hit testing flakiness
     const existingWall = page.locator(".wall-shape line").first();
-    await existingWall.click({ position: { x: 50, y: 4 }, force: true });
+    const box = await existingWall.boundingBox();
+    if (box) {
+      await existingWall.dispatchEvent("click", {
+        clientX: box.x + box.width / 2,
+        clientY: box.y + box.height / 2,
+      });
+    }
 
     // Openings group inside wall shape should have window lines
     const windowLines = page.locator('.wall-shape line[stroke="#38bdf8"]');
-    await expect(windowLines.first()).toBeVisible();
+    await expect(windowLines).toHaveCount(3);
   });
 
   test("Selecting a room displays 8-handle bounding box for resizing", async ({ page }) => {

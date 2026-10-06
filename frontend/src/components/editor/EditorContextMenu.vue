@@ -183,7 +183,7 @@ onUnmounted(() => {
         <div class="menu-divider"></div>
         <button class="menu-item danger" @click="handleItemClick('delete')">
           <span class="item-icon">🗑️</span>
-          <span>Delete Room</span>
+          <span>{{ (menuState.target && 'openingId' in menuState.target) ? 'Delete Opening' : 'Delete Room' }}</span>
         </button>
       </div>
 
@@ -204,7 +204,7 @@ onUnmounted(() => {
         <div class="menu-divider"></div>
         <button class="menu-item danger" @click="handleItemClick('delete')">
           <span class="item-icon">🗑️</span>
-          <span>Delete Wall</span>
+          <span>{{ (menuState.target && 'openingId' in menuState.target) ? 'Delete Opening' : 'Delete Wall' }}</span>
         </button>
       </div>
 

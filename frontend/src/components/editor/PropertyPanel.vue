@@ -204,6 +204,12 @@ function updateEntityId(e: Event) {
   }
 }
 
+function removeAttachment() {
+  if (selectedEndpoint.value) {
+    planStore.updateEndpoint(selectedEndpoint.value.id, { attached_to: null });
+  }
+}
+
 // 2. Companion Entities Management (Spec §Endpoints)
 const selectedCompanionToAdd = ref("");
 
@@ -404,25 +410,31 @@ function toggleMinimize() {
 }
 
 function startHeaderDrag(e: MouseEvent) {
-  if (dockMode.value !== "float") {
-    setDockMode("float");
-    floatPos.value = {
-      x: Math.max(10, Math.min(window.innerWidth - 310, e.clientX - 150)),
-      y: Math.max(10, Math.min(window.innerHeight - 100, e.clientY - 20)),
-    };
-  }
-
   isDraggingHeader.value = true;
   const startClientX = e.clientX;
   const startClientY = e.clientY;
-  const origX = floatPos.value.x;
-  const origY = floatPos.value.y;
+  const origDockMode = dockMode.value;
+  let origX = floatPos.value.x;
+  let origY = floatPos.value.y;
+  let hasMoved = false;
 
   const onMouseMove = (ev: MouseEvent) => {
-    floatPos.value = {
-      x: Math.max(10, Math.min(window.innerWidth - 310, origX + (ev.clientX - startClientX))),
-      y: Math.max(10, Math.min(window.innerHeight - 80, origY + (ev.clientY - startClientY))),
-    };
+    const dx = ev.clientX - startClientX;
+    const dy = ev.clientY - startClientY;
+    if (!hasMoved && Math.hypot(dx, dy) > 3) {
+      hasMoved = true;
+      if (origDockMode !== "float") {
+        setDockMode("float");
+        origX = Math.max(10, Math.min(window.innerWidth - 310, startClientX - 150));
+        origY = Math.max(10, Math.min(window.innerHeight - 100, startClientY - 20));
+      }
+    }
+    if (hasMoved || origDockMode === "float") {
+      floatPos.value = {
+        x: Math.max(10, Math.min(window.innerWidth - 310, origX + dx)),
+        y: Math.max(10, Math.min(window.innerHeight - 80, origY + dy)),
+      };
+    }
   };
 
   const onMouseUp = () => {
@@ -586,6 +598,19 @@ onUnmounted(() => {
             {{ t.label }}
           </option>
         </select>
+      </div>
+
+      <!-- Attached To -->
+      <div class="prop-group">
+        <label>Attached To</label>
+        <div v-if="selectedEndpoint.attached_to" class="attached-badge">
+          <span class="attachment-icon">🔗</span>
+          <span class="attachment-text">{{ selectedEndpoint.attached_to.type.charAt(0).toUpperCase() + selectedEndpoint.attached_to.type.slice(1) }}</span>
+          <button class="remove-attachment-btn" @click="removeAttachment" title="Detach from shape">×</button>
+        </div>
+        <div v-else class="unattached-text">
+          <span class="field-help">Not attached. Drag near a wall, room edge, door, or window to attach.</span>
+        </div>
       </div>
 
       <!-- Rotation with slider and 90° quick buttons -->
@@ -1388,6 +1413,28 @@ label {
 }
 
 /* Warnings and Alerts */
+.attached-badge {
+  display: flex;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  gap: 6px;
+  margin-top: 4px;
+}
+.attachment-icon { font-size: 14px; }
+.attachment-text { flex: 1; font-size: 13px; color: #a7f3d0; font-weight: 500; }
+.remove-attachment-btn {
+  background: transparent;
+  border: none;
+  color: #6ee7b7;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.remove-attachment-btn:hover { color: #fff; }
 .warning-alert-box {
   padding: 10px 12px;
   background: rgba(239, 68, 68, 0.12);
