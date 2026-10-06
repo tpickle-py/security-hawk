@@ -2,9 +2,10 @@
 
 <div align="center">
 
-![Tests](https://img.shields.io/badge/tests-58%20passed-success?style=for-the-badge&logo=pytest&logoColor=white)
-![Coverage](https://img.shields.io/badge/coverage-pytest--cov%2073%25-informational?style=for-the-badge&logo=codecov&logoColor=white)
-![Version](https://img.shields.io/badge/version-v0.3.4-blue?style=for-the-badge&logo=semver&logoColor=white)
+[![Playwright E2E Tests](https://github.com/tpickle-py/security-hawk/actions/workflows/e2e.yaml/badge.svg)](https://github.com/tpickle-py/security-hawk/actions/workflows/e2e.yaml)
+![Tests](https://img.shields.io/badge/tests-74%20passed-success?style=for-the-badge&logo=pytest&logoColor=white)
+![Coverage](https://img.shields.io/badge/coverage-pytest--cov%2074%25-informational?style=for-the-badge&logo=codecov&logoColor=white)
+![Version](https://img.shields.io/badge/version-v0.4.1-blue?style=for-the-badge&logo=semver&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue?style=for-the-badge&logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/django-5.2%2B-092E20?style=for-the-badge&logo=django&logoColor=white)
 ![Vue.js](https://img.shields.io/badge/vue.js-3.5%2B-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white)
