@@ -465,15 +465,15 @@ onUnmounted(() => {
         <span>⚓</span>
       </button>
 
-      <!-- Toggle AutoCAD Command Bar -->
+      <!-- Toggle Command Bar -->
       <button
         class="tool-btn action"
         :class="{ active: editorStore.showCadCommandBar }"
-        title="Toggle AutoCAD Command Line (Command bar, shortcuts, helper)"
+        title="Toggle Command Line (Command bar, shortcuts, helper)"
         @click="editorStore.toggleCadCommandBar"
       >
         <span>⌨️</span>
-        <span>AutoCAD</span>
+        <span>Command Bar</span>
       </button>
 
       <!-- Security Coverage Audit (AI / MCP) -->
@@ -530,7 +530,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  z-index: 100;
+  z-index: 190;
+  max-width: calc(100% - 32px);
+  overflow-x: auto;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

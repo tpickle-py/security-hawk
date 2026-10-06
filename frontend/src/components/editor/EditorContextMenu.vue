@@ -242,7 +242,7 @@ onUnmounted(() => {
         <div class="menu-divider"></div>
         <button class="menu-item" @click="handleItemClick('toggle-cad')">
           <span class="item-icon">⌨️</span>
-          <span>AutoCAD Command Bar</span>
+          <span>Command Bar</span>
         </button>
         <button class="menu-item" @click="handleItemClick('calibrate-scale')">
           <span class="item-icon">📐</span>

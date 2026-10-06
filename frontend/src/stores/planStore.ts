@@ -48,9 +48,14 @@ export const usePlanStore = defineStore("plan", () => {
       currentPlanId.value = data.id;
       site.value = data.plan;
 
-      // Select overview or first floor
-      currentBuildingId.value = null;
-      currentFloorId.value = null;
+      // Select first floor if available, otherwise overview
+      if (site.value.buildings?.length > 0 && site.value.buildings[0].floors?.length > 0) {
+        currentBuildingId.value = site.value.buildings[0].id;
+        currentFloorId.value = site.value.buildings[0].floors[0].id;
+      } else {
+        currentBuildingId.value = null;
+        currentFloorId.value = null;
+      }
       useHistoryStore().clear();
     } catch (e: any) {
       error.value = e.message || "Failed to load plan";

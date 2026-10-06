@@ -66,7 +66,7 @@ function handleMouseDown(e: MouseEvent) {
     @mousedown.stop="handleMouseDown"
   >
     <!-- Coverage FOV preview in editor -->
-    <g v-if="coveragePath" class="editor-coverage-group">
+    <g v-if="coveragePath" class="editor-coverage-group" pointer-events="none">
       <path
         :d="coveragePath"
         :fill="endpoint.type === 'camera' ? (isSelected ? 'rgba(99, 102, 241, 0.18)' : 'rgba(99, 102, 241, 0.09)') : 'rgba(16, 185, 129, 0.09)'"
@@ -91,6 +91,9 @@ function handleMouseDown(e: MouseEvent) {
         :fill="endpoint.type === 'camera' ? (isSelected ? '#818cf8' : 'rgba(99, 102, 241, 0.6)') : 'rgba(16, 185, 129, 0.6)'"
       />
     </g>
+
+    <!-- Invisible round hit area for reliable selection -->
+    <circle cx="0" cy="0" r="18" fill="transparent" class="endpoint-hitbox" />
 
     <!-- Selection highlight circle -->
     <circle

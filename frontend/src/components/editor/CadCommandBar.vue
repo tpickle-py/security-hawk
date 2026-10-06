@@ -31,7 +31,7 @@ const isMinimized = ref(false);
 const showHelper = ref(false);
 const inputCommand = ref("");
 const commandHistory = ref<Array<{ type: "input" | "output" | "error"; text: string }>>([
-  { type: "output", text: "Security Hawk CAD Command Line initialized. Type HELP or ? for commands." },
+  { type: "output", text: "Security Hawk Command Line initialized. Type HELP or ? for commands." },
 ]);
 const historyIndex = ref(-1);
 const pastInputs = ref<string[]>([]);
@@ -176,6 +176,33 @@ const commandsList: CadCommandDef[] = [
     },
   },
   {
+    command: "GROUP",
+    aliases: ["GRP"],
+    description: "Group selected endpoints into a logical unit (e.g. GROUP Rack Unit)",
+    category: "Modify",
+    action: (args) => {
+      if (editorStore.selectedEndpointIds.length < 2) {
+        return "Select 2 or more endpoints to group.";
+      }
+      const name = args.join(" ").trim() || "Grouped Unit";
+      planStore.groupEndpoints(editorStore.selectedEndpointIds, name);
+      return `Grouped ${editorStore.selectedEndpointIds.length} item(s) as "${name}".`;
+    },
+  },
+  {
+    command: "UNGROUP",
+    aliases: ["UNGRP"],
+    description: "Ungroup currently selected endpoints",
+    category: "Modify",
+    action: () => {
+      if (editorStore.selectedEndpointIds.length === 0) {
+        return "No endpoints selected to ungroup.";
+      }
+      planStore.ungroupEndpoints(editorStore.selectedEndpointIds);
+      return `Ungrouped ${editorStore.selectedEndpointIds.length} item(s).`;
+    },
+  },
+  {
     command: "DELETE",
     aliases: ["DEL", "ERASE"],
     description: "Delete currently selected endpoints, shapes, or rooms",
@@ -301,11 +328,11 @@ const commandsList: CadCommandDef[] = [
   {
     command: "HELP",
     aliases: ["?"],
-    description: "Display or toggle AutoCAD command helper guide",
+    description: "Display or toggle command helper guide",
     category: "File",
     action: () => {
       showHelper.value = !showHelper.value;
-      return showHelper.value ? "Opened AutoCAD command helper." : "Closed command helper.";
+      return showHelper.value ? "Opened command helper." : "Closed command helper.";
     },
   },
   {
@@ -343,12 +370,25 @@ const commandsList: CadCommandDef[] = [
 // Contextual quick chips
 const contextualChips = computed<QuickChip[]>(() => {
   if (editorStore.selectedEndpointId || editorStore.selectedEndpointIds.length > 0) {
-    return [
+    const chips: QuickChip[] = [
       { label: "Rotate 90°", command: "ROTATE 90", icon: "↻" },
       { label: "Rotate -90°", command: "ROTATE -90", icon: "↺" },
+    ];
+    if (editorStore.selectedEndpointIds.length > 1) {
+      chips.push({ label: "Group", command: "GROUP", icon: "🔗" });
+    }
+    const hasGrouped = editorStore.selectedEndpointIds.some((id) => {
+      const ep = planStore.currentEndpoints.find((e) => e.id === id);
+      return ep && ep.group_id;
+    });
+    if (hasGrouped) {
+      chips.push({ label: "Ungroup", command: "UNGROUP", icon: "🔓" });
+    }
+    chips.push(
       { label: "Delete", command: "DELETE", icon: "🗑️" },
       { label: "Deselect", command: "DESELECT", icon: "✕" },
-    ];
+    );
+    return chips;
   }
   if (editorStore.selectedSubAreaId || editorStore.selectedShapeId) {
     return [
@@ -549,7 +589,7 @@ onUnmounted(() => {
     <div class="cad-header" @mousedown="startHeaderDrag">
       <div class="cad-title-group">
         <span class="cad-logo">⌨️</span>
-        <span class="cad-title">AutoCAD Command Line</span>
+        <span class="cad-title">Command Bar</span>
         <span class="cad-active-tool">Tool: [{{ editorStore.activeTool.toUpperCase() }}]</span>
       </div>
 
@@ -557,7 +597,7 @@ onUnmounted(() => {
         <button
           class="cad-btn"
           :class="{ active: showHelper }"
-          title="Toggle AutoCAD Command Helper Guide"
+          title="Toggle Command Helper Guide"
           @click="showHelper = !showHelper"
         >
           ❓ Helper
@@ -642,7 +682,7 @@ onUnmounted(() => {
     <div v-if="showHelper" class="cad-helper-drawer glass-panel" @mousedown.stop>
       <div class="helper-header">
         <div class="helper-title">
-          <span>📐 AutoCAD Command Reference</span>
+          <span>📐 Command Reference</span>
         </div>
         <button class="helper-close-btn" @click="showHelper = false" title="Close Helper (Esc)">×</button>
       </div>
@@ -756,7 +796,7 @@ onUnmounted(() => {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Dock Bottom: Classic AutoCAD command bar */
+/* Dock Bottom: Classic command bar */
 .cad-command-bar.dock-bottom {
   bottom: 12px;
   left: 50%;

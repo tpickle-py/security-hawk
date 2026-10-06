@@ -2,6 +2,29 @@
 
 All notable changes to Security Hawk will be documented in this file.
 
+## [0.4.1] - 2026-10-05
+
+### Added
+- **Playwright E2E Test Suite & CI Automation**:
+  - Comprehensive end-to-end test coverage across Entity Picker, Command Bar, Canvas drawing, Wall and opening cutouts, Endpoint grouping, Workspace presets, and Security Audit modal.
+  - Complete mock API backend fixtures (`frontend/e2e/helpers/mockApi.ts`) for fast, hermetic test runs.
+  - Automated GitHub Actions E2E workflow (`.github/workflows/e2e.yaml`) with Playwright HTML artifact archiving.
+- **Command Bar Grouping & Ungrouping**:
+  - Dedicated `GROUP` and `UNGROUP` commands and dynamic quick-action chips for multi-selected endpoints.
+
+### Changed
+- **Home Assistant Sidebar Icon**:
+  - Configured `panel_icon: "mdi:shield-eye"` in add-on manifest for a sleek Home Assistant sidebar icon.
+- **Command Bar Clean Branding**:
+  - Standardized all terminology to "Command Bar" across UI, hotkeys, tooltips, and documentation.
+- **Entity Picker & Smart Match Enhancements**:
+  - Smart Match now respects active area and domain filter selections, allowing targeted batch assignments.
+  - Resolved list item overlap issues and sticky scroll states in the entity drawer.
+  - Reactive unassigned count badge updating immediately on filter or area changes.
+- **Canvas Ergonomics & Layout Fixes**:
+  - Added transparent SVG hitbox targets and FOV cone pointer isolation for reliable endpoint drag selection.
+  - Constrained toolbar overflow and adjusted z-indexing to prevent canvas control clipping on smaller viewports.
+
 ## [0.4.0] - 2026-10-05
 
 ### Added
@@ -10,7 +33,7 @@ All notable changes to Security Hawk will be documented in this file.
   - 5 configurable access control permission tiers (`read_only`, `design_only`, `rules_only`, `full_access`, `disabled`) with optional Bearer / X-MCP-Key token authentication.
   - Automatic sensitive data redaction masking IPv4 addresses (`[REDACTED_IP]`) and authentication headers (`[REDACTED_TOKEN]`).
   - Native tools for AI assistants to inspect layouts, audit security coverage gaps, construct rooms/walls, and synthesize compound rules.
-- **AutoCAD Command Bar & Keyboard Ergonomics**:
+- **Command Bar & Keyboard Ergonomics**:
   - Keyboard-first command terminal supporting 20+ CAD commands (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, `AUDIT`, `ZEN`).
   - Global `/` or `:` hotkey activation focusing the command line from anywhere on the canvas.
   - Contextual quick-action chips (`[ROTATE 90°]`, `[RENAME]`, `[GRID]`, `[AUDIT]`) that dynamically adapt to the currently selected object.

@@ -1,5 +1,5 @@
 name: "Security Hawk"
-version: "0.4.0"
+version: "0.4.1"
 slug: "security_hawk"
 description: "Floor plan viewer with live sensor and camera state"
 url: "https://github.com/tpickle/security-hawk"
@@ -15,6 +15,7 @@ init: false
 # Ingress (editor UI behind HA auth)
 ingress: true
 ingress_port: 8099
+panel_icon: mdi:shield-eye
 
 # Direct kiosk port (Route B)
 ports:

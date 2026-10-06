@@ -1,6 +1,6 @@
 ---
 name: "Security Hawk"
-version: "0.4.0"
+version: "0.4.1"
 slug: "security_hawk"
 description: "Interactive floor plan viewer with live sensor states, video streaming, and kiosk mode"
 url: "https://github.com/tpickle-py/security-hawk"
@@ -16,6 +16,7 @@ init: false
 # Ingress (editor UI behind HA authentication)
 ingress: true
 ingress_port: 8099
+panel_icon: mdi:shield-eye
 
 # Direct kiosk port (Route B: direct TV/wall display access)
 ports:

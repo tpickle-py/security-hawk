@@ -26,7 +26,7 @@
   - **Background Upload**: Upload architectural floor plans (sanitized SVGs, PNG, JPEG, WebP).
   - **Scale Calibration**: Two-point real-world scale calibration in metres.
   - **Interactive Room & Zone Movement & 8-Handle Resizing**: Select rooms or sub-areas and move them freely or resize dynamically using 8 cardinal bounding box handles (`NW`, `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`).
-  - **AutoCAD Command Line Bar**: CAD-style keyboard terminal (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, etc.) with autocomplete suggestions, command history, and a dockable / collapsible helper reference drawer.
+  - **Command Bar**: CAD-style keyboard terminal (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, etc.) with autocomplete suggestions, command history, and a dockable / collapsible helper reference drawer.
   - **Right-Click Context Menu**: Contextual right-click popup menu on canvas, endpoints, rooms, and walls providing instant property inspection, 90° rotations, duplication, area reassignment, cutout creation, and deletion.
   - **Box & Marquee Drag Selection**: Drag across empty canvas to select multiple entities at once, with `Shift` modifier support.
   - **Synchronized Multi-Move**: Drag any selected endpoint to move the entire selection across the canvas simultaneously.

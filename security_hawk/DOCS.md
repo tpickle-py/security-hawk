@@ -1,6 +1,6 @@
 # Home Assistant Add-on: Security Hawk
 
-Interactive multi-floor plan viewer and security monitoring hub for Home Assistant. Features live entity and companion sensor state, low-latency live camera streaming, motion traversal trails, building roll-ups, customizable compound alert rules, an embedded Model Context Protocol (MCP) AI server, an AutoCAD-style command bar, smart keyword matching, magnetic alignment guides, and direct full-screen kiosk mode for wall displays and TVs.
+Interactive multi-floor plan viewer and security monitoring hub for Home Assistant. Features live entity and companion sensor state, low-latency live camera streaming, motion traversal trails, building roll-ups, customizable compound alert rules, an embedded Model Context Protocol (MCP) AI server, a CAD-style command bar, smart keyword matching, magnetic alignment guides, and direct full-screen kiosk mode for wall displays and TVs.
 
 ---
 
@@ -16,7 +16,7 @@ Interactive multi-floor plan viewer and security monitoring hub for Home Assista
   - [5. Direct Kiosk Mode (TVs & Wall Mounts)](#5-direct-kiosk-mode-tvs--wall-mounts)
 - [Core Features](#core-features)
   - [Model Context Protocol (MCP) AI Tools Server](#model-context-protocol-mcp-ai-tools-server)
-  - [AutoCAD Command Bar & Keyboard-First Navigation](#autocad-command-bar--keyboard-first-navigation)
+  - [Command Bar & Keyboard-First Navigation](#command-bar--keyboard-first-navigation)
   - [Smart Match & Keyword Taxonomy Engine](#smart-match--keyword-taxonomy-engine)
   - [Magnetic Smart Guides & Direct Canvas Drop](#magnetic-smart-guides--direct-canvas-drop)
   - [Interactive 8-Handle Room Resizing & Dragging](#interactive-8-handle-room-resizing--dragging)
@@ -85,7 +85,7 @@ Security Hawk is fully integrated with Home Assistant Ingress:
 
 Switch between optimized workflows with one click in the top toolbar:
 - **🗺️ Mapping Mode**: Dual-column layout with the Home Assistant Entity Picker on the left and Properties on the right.
-- **⌨️ CAD Focus**: Collapses side panels into floating status badges and docks the AutoCAD Command Bar at the bottom for keyboard-first drafting.
+- **⌨️ CAD Focus**: Collapses side panels into floating status badges and docks the Command Bar at the bottom for keyboard-first drafting.
 - **🧘 Zen Canvas**: Minimizes all toolbars and panels into unobtrusive pills, dedicating the entire screen to the floor plan canvas.
 
 ### 4. Live Monitoring Mode
@@ -127,7 +127,7 @@ Security Hawk includes a built-in Model Context Protocol (MCP) server allowing A
 - **Sensitive Data Redaction**: Automatic scrubbing of IPv4 addresses (`[REDACTED_IP]`) and authentication headers (`[REDACTED_TOKEN]`).
 - **One-Click Security Audits**: Surface blind spots and perimeter gaps using `validate_security_coverage`.
 
-### AutoCAD Command Bar & Keyboard-First Navigation
+### Command Bar & Keyboard-First Navigation
 
 - **Global `/` or `:` Activation**: Press `/` from anywhere on the canvas to immediately focus the command prompt without touching your mouse.
 - **20+ CAD Commands**: Execute `WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, `AUDIT`, `ZEN`, etc.

@@ -269,6 +269,7 @@ onMounted(() => {
   letter-spacing: -0.3px;
   background: linear-gradient(135deg, #f8fafc 0%, #cbd5e1 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -373,6 +374,7 @@ onMounted(() => {
   flex: 1;
   height: 100%;
   position: relative;
+  overflow: hidden;
 }
 
 .canvas-wrapper.full-live {

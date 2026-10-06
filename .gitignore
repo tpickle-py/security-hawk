@@ -32,6 +32,8 @@ frontend/node_modules
 frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
 backend/static/frontend/assets/
 backend/static/frontend/index.html
 

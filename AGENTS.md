@@ -196,7 +196,7 @@ git push origin main
 - **Sensitive Data Protection**:
   - All responses automatically strip raw tokens and mask IPv4 addresses (`[REDACTED_IP]`) and authentication headers (`[REDACTED_TOKEN]`).
 
-### AutoCAD Command Bar (`CadCommandBar.vue`)
+### Command Bar (`CadCommandBar.vue`)
 - Implements a keyboard-first terminal interface with 20+ CAD commands (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, etc.).
 - Includes autocomplete recommendations, arrow key command history (`Up`/`Down`), docking (`bottom`, `top`, `float`), and a collapsible quick-reference helper drawer.
 

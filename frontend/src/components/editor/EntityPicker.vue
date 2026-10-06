@@ -12,9 +12,6 @@ const entityStore = useEntityStore();
 const planStore = usePlanStore();
 
 const showSmartMatchModal = ref(false);
-const smartMatches = computed(() => {
-  return findSmartMatches(entityStore.unassignedEntities, entityStore.areas);
-});
 
 const query = ref("");
 const selectedDomain = ref("");
@@ -52,6 +49,66 @@ const domains = [
   { label: "Windows", value: "window" },
 ];
 
+const selectedDomainLabel = computed(() => {
+  const d = domains.find((item) => item.value === selectedDomain.value);
+  return d && d.value ? d.label : "";
+});
+
+const selectedAreaName = computed(() => {
+  if (!selectedArea.value) return "";
+  const a = entityStore.areas.find((item) => item.area_id === selectedArea.value);
+  return a ? a.name : "";
+});
+
+// Domain and Area aware Smart Match computation
+const smartMatches = computed(() => {
+  let candidates = entityStore.unassignedEntities;
+
+  if (selectedDomain.value) {
+    candidates = candidates.filter((e) => {
+      const gType = entityStore.guessEndpointType(e);
+      if (selectedDomain.value === "camera") return e.domain === "camera" || gType === "camera";
+      if (selectedDomain.value === "motion") return gType === "motion";
+      if (selectedDomain.value === "door") return gType === "door";
+      if (selectedDomain.value === "window") return gType === "window";
+      return e.domain === selectedDomain.value;
+    });
+  }
+
+  let targetAreas = entityStore.areas;
+  if (selectedArea.value) {
+    targetAreas = targetAreas.filter((a) => a.area_id === selectedArea.value);
+  }
+
+  return findSmartMatches(candidates, targetAreas);
+});
+
+// Filtered entities to display in list
+const displayEntities = computed(() => {
+  if (activeTab.value === "all") {
+    return entityStore.visibleEntities;
+  }
+  if (activeTab.value === "unassigned") {
+    let list = entityStore.unassignedEntities;
+    if (selectedDomain.value) {
+      list = list.filter((e) => {
+        const gType = entityStore.guessEndpointType(e);
+        if (selectedDomain.value === "camera") return e.domain === "camera" || gType === "camera";
+        if (selectedDomain.value === "motion") return gType === "motion";
+        if (selectedDomain.value === "door") return gType === "door";
+        if (selectedDomain.value === "window") return gType === "window";
+        return e.domain === selectedDomain.value;
+      });
+    }
+    if (selectedArea.value) {
+      const matchMap = new Set(smartMatches.value.map((m) => m.entity.entity_id));
+      list = list.filter((e) => matchMap.has(e.entity_id));
+    }
+    return list;
+  }
+  return [];
+});
+
 const placedEntityCounts = computed(() => {
   const counts = new Map<string, number>();
   for (const ep of planStore.currentEndpoints) {
@@ -64,10 +121,11 @@ function handleSearch() {
   if (activeTab.value === "rules") {
     return;
   }
+  const queryAreaId = activeTab.value === "unassigned" ? "" : selectedArea.value;
   entityStore.fetchEntities(
     query.value,
     selectedDomain.value,
-    selectedArea.value,
+    queryAreaId,
     activeTab.value === "unassigned"
   );
 }
@@ -708,43 +766,54 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Smart Match Action Banner (Unassigned Tab) -->
-    <div
-      v-if="activeTab === 'unassigned' && smartMatches.length > 0"
-      class="smart-match-banner"
-    >
-      <div class="banner-text">
-        <span class="banner-sparkle">🪄</span>
-        <div class="banner-details">
-          <span class="banner-title">Smart Match Found</span>
-          <span class="banner-sub">{{ smartMatches.length }} unassigned entit{{ smartMatches.length === 1 ? 'y' : 'ies' }} match room names</span>
-        </div>
-      </div>
-      <button
-        class="btn-smart-match"
-        @click="showSmartMatchModal = true"
-        title="Review and batch-assign matching rooms"
-      >
-        Auto-Assign
-      </button>
-    </div>
-
-    <!-- ENTITY LIST (HA Physical Entities) -->
-    <div v-else class="entity-list">
-      <div v-if="entityStore.isLoading" class="list-state">Loading entities...</div>
-      <div v-else-if="(activeTab === 'unassigned' ? entityStore.unassignedEntities.length : entityStore.visibleEntities.length) === 0" class="list-state">
-        <span v-if="activeTab === 'unassigned'">All entities have been assigned to rooms! 🎉</span>
-        <span v-else>No matching entities found.</span>
-      </div>
-
+    <!-- UNASSIGNED OR ALL PHYSICAL ENTITIES VIEW -->
+    <template v-else-if="activeTab === 'all' || activeTab === 'unassigned'">
+      <!-- Smart Match Action Banner (Unassigned Tab) -->
       <div
-        v-for="ent in (activeTab === 'unassigned' ? entityStore.unassignedEntities : entityStore.visibleEntities)"
-        :key="ent.entity_id"
-        class="entity-item"
-        :class="{ placed: (placedEntityCounts.get(ent.entity_id) || 0) > 0 }"
-        draggable="true"
-        @dragstart="handleDragStart($event, ent)"
+        v-if="activeTab === 'unassigned' && smartMatches.length > 0"
+        class="smart-match-banner"
       >
+        <div class="banner-text">
+          <span class="banner-sparkle">🪄</span>
+          <div class="banner-details">
+            <span class="banner-title">Smart Match Found</span>
+            <span class="banner-sub">
+              {{ smartMatches.length }} unassigned {{ selectedDomainLabel ? selectedDomainLabel : 'entit' + (smartMatches.length === 1 ? 'y' : 'ies') }}
+              <template v-if="selectedAreaName"> matching {{ selectedAreaName }}</template>
+              <template v-else> match room names</template>
+            </span>
+          </div>
+        </div>
+        <button
+          class="btn-smart-match"
+          @click="showSmartMatchModal = true"
+          title="Review and batch-assign matching rooms"
+        >
+          Auto-Assign
+        </button>
+      </div>
+
+      <!-- ENTITY LIST (HA Physical Entities) -->
+      <div class="entity-list">
+        <div v-if="entityStore.isLoading" class="list-state">Loading entities...</div>
+        <div v-else-if="displayEntities.length === 0" class="list-state">
+          <span v-if="activeTab === 'unassigned' && selectedAreaName">
+            No unassigned {{ selectedDomainLabel || 'entities' }} matching {{ selectedAreaName }}.
+          </span>
+          <span v-else-if="activeTab === 'unassigned'">
+            All entities have been assigned to rooms! 🎉
+          </span>
+          <span v-else>No matching entities found.</span>
+        </div>
+
+        <div
+          v-for="ent in displayEntities"
+          :key="ent.entity_id"
+          class="entity-item"
+          :class="{ placed: (placedEntityCounts.get(ent.entity_id) || 0) > 0 }"
+          draggable="true"
+          @dragstart="handleDragStart($event, ent)"
+        >
         <div class="entity-icon-badge" :class="entityStore.guessEndpointType(ent)">
           <span v-if="entityStore.guessEndpointType(ent) === 'motion'">🏃</span>
           <span v-else-if="entityStore.guessEndpointType(ent) === 'door'">🚪</span>
@@ -822,6 +891,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+  </template>
 
     <!-- Rule Builder Modal Component -->
     <RuleBuilderModal
