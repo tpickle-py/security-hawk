@@ -6,6 +6,14 @@ export interface MockDataOptions {
 }
 
 export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
+  // Ensure every test starts with clean local storage and default Mapping workspace
+  await page.addInitScript(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+  });
+
   const planId = options.planId || "plan_main";
   const planName = options.planName || "HQ Security Campus";
 
@@ -122,7 +130,7 @@ export async function setupMockApi(page: Page, options: MockDataOptions = {}) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ plan: defaultPlan, plans: [defaultPlan] }),
+        body: JSON.stringify({ id: defaultPlan.id, plan: defaultPlan, plans: [defaultPlan] }),
       });
     } else if (method === "PUT" || method === "POST") {
       await route.fulfill({

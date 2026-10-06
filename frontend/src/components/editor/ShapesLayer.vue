@@ -10,7 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "select-shape", shapeId: string): void;
-  (e: "wall-click", wallId: string, clickPoint: { x: number; y: number }): void;
+  (e: "wall-click", wallId: string, clickPoint: { x: number; y: number }, event?: MouseEvent): void;
   (e: "room-drag-start", shape: Shape, event: MouseEvent): void;
   (e: "shape-contextmenu", shape: Shape, event: MouseEvent): void;
   (e: "room-dblclick", shape: Shape, event: MouseEvent): void;
@@ -131,7 +131,7 @@ function processWallGeometry(geom: WallGeometry) {
 function handleWallClick(shape: Shape, e: MouseEvent) {
   if (editorStore.activeTool === "door" || editorStore.activeTool === "window") {
     e.stopPropagation();
-    emit("wall-click", shape.id, { x: props.cursorPoint?.x || 0, y: props.cursorPoint?.y || 0 });
+    emit("wall-click", shape.id, { x: props.cursorPoint?.x || 0, y: props.cursorPoint?.y || 0 }, e);
     return;
   }
   emit("select-shape", shape.id);

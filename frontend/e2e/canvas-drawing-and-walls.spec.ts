@@ -9,10 +9,8 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
 
   test("Wall tool draws new wall segments on canvas", async ({ page }) => {
     // Select wall tool via toolbar
-    const wallBtn = page.locator(".toolbar button").filter({ hasText: "Wall" }).or(
-      page.locator('.toolbar button[title*="Wall"]')
-    );
-    await wallBtn.first().click({ force: true });
+    const wallBtn = page.locator('.toolbar button[title*="Draw Wall"]').first();
+    await wallBtn.click({ force: true });
 
     // Verify wall tool is active
     const canvas = page.locator("svg.editor-svg");
@@ -22,13 +20,8 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     const initialWalls = await page.locator(".wall-shape").count();
 
     // Click canvas at two distinct points to draw a wall
-    const box = await canvas.boundingBox();
-    if (!box) throw new Error("Canvas bounding box not found");
-
-    // Click first point
-    await page.mouse.click(box.x + 600, box.y + 300);
-    // Click second point to finalize segment
-    await page.mouse.click(box.x + 800, box.y + 300);
+    await canvas.click({ position: { x: 600, y: 300 } });
+    await canvas.click({ position: { x: 800, y: 300 } });
 
     // Verify a new wall shape was added
     const afterWalls = await page.locator(".wall-shape").count();
@@ -40,7 +33,6 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     const doorBtn = page.locator('.toolbar button[title*="Door"]').first();
     await doorBtn.click({ force: true });
 
-    // In default plan, wall_1 is located horizontally at y=100 from x=100 to 500
     // Initial openings count in default wall
     const initialDoors = await page.locator('.wall-shape path[stroke-dasharray="3 3"]').count();
 
@@ -71,7 +63,7 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     // Click on a subarea to select it
     const subArea = page.locator(".sub-area-item").first();
     await expect(subArea).toBeVisible();
-    await subArea.click({ position: { x: 20, y: 20 } });
+    await subArea.click({ force: true });
 
     // Bounding box overlay should appear
     const resizeOverlay = page.locator(".room-resize-overlay");
@@ -87,7 +79,7 @@ test.describe("Canvas Architectural Drafting & Wall Workflows", () => {
     await expect(subArea).toContainText("Living Room");
 
     // Double-click to start inline rename
-    await subArea.dblclick({ position: { x: 20, y: 20 } });
+    await subArea.dblclick({ force: true });
 
     // Inline rename input should appear inside <foreignObject>
     const renameInput = page.locator(".inline-rename-input");

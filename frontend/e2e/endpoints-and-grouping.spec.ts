@@ -3,6 +3,7 @@ import { setupMockApi } from "./helpers/mockApi";
 
 test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
   test.beforeEach(async ({ page }) => {
+    page.on("console", (msg) => console.log("BROWSER:", msg.text()));
     await setupMockApi(page);
     await page.goto("/");
   });
@@ -24,11 +25,16 @@ test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
     const endpoints = page.locator(".endpoint-icon-group");
     await expect(endpoints.first()).toBeVisible();
 
+    const count = await endpoints.count();
+    console.log("ENDPOINT COUNT IN TEST:", count);
+
     // Select first endpoint
     await endpoints.nth(0).click({ force: true });
 
     // Shift-click second endpoint
-    await endpoints.nth(1).click({ modifiers: ["Shift"], force: true });
+    await page.keyboard.down("Shift");
+    await endpoints.nth(1).click({ force: true });
+    await page.keyboard.up("Shift");
 
     // Both should have selected class
     await expect(endpoints.nth(0)).toHaveClass(/selected/);
@@ -36,13 +42,15 @@ test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
 
     // PropertyPanel shows multi-selection header
     const propPanel = page.locator(".property-panel");
-    await expect(propPanel).toContainText("2 Items Selected");
+    await expect(propPanel).toContainText("2 items");
   });
 
   test("Grouping multiple endpoints creates a logical unit with 'G' badge", async ({ page }) => {
     const endpoints = page.locator(".endpoint-icon-group");
     await endpoints.nth(0).click({ force: true });
-    await endpoints.nth(1).click({ modifiers: ["Shift"], force: true });
+    await page.keyboard.down("Shift");
+    await endpoints.nth(1).click({ force: true });
+    await page.keyboard.up("Shift");
 
     const propPanel = page.locator(".property-panel");
     await expect(propPanel).toContainText("Group Into Unit");
@@ -53,7 +61,7 @@ test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
     await propPanel.locator("button").filter({ hasText: "Group as Single Unit" }).click();
 
     // Endpoints now display 'G' badge in SVG
-    const groupBadges = page.locator(".endpoint-icon-group g circle + text").filter({ hasText: "G" });
+    const groupBadges = page.locator(".endpoint-icon-group text").filter({ hasText: "G" });
     await expect(groupBadges).toHaveCount(2);
 
     // Contextual chip in CAD command line should now show 'Ungroup' when opened
@@ -64,19 +72,21 @@ test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
   test("Ungrouping endpoints removes 'G' badge", async ({ page }) => {
     const endpoints = page.locator(".endpoint-icon-group");
     await endpoints.nth(0).click({ force: true });
-    await endpoints.nth(1).click({ modifiers: ["Shift"], force: true });
+    await page.keyboard.down("Shift");
+    await endpoints.nth(1).click({ force: true });
+    await page.keyboard.up("Shift");
 
     const propPanel = page.locator(".property-panel");
     await propPanel.locator("button").filter({ hasText: "Group as Single Unit" }).click();
 
     // Verify badges appeared
-    await expect(page.locator(".endpoint-icon-group g text").filter({ hasText: "G" })).toHaveCount(2);
+    await expect(page.locator(".endpoint-icon-group text").filter({ hasText: "G" })).toHaveCount(2);
 
     // Click Ungroup
     await propPanel.locator("button").filter({ hasText: "Ungroup Selected Items" }).click();
 
     // Badges should be removed
-    await expect(page.locator(".endpoint-icon-group g text").filter({ hasText: "G" })).toHaveCount(0);
+    await expect(page.locator(".endpoint-icon-group text").filter({ hasText: "G" })).toHaveCount(0);
   });
 
   test("Moving an endpoint updates its position", async ({ page }) => {

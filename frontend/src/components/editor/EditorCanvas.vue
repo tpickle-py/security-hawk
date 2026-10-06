@@ -284,7 +284,7 @@ function closeRoomPolygon() {
   editorStore.drawingPoints = [];
 }
 
-function handleWallClick(wallId: string, clickPoint: { x: number; y: number }) {
+function handleWallClick(wallId: string, clickPoint: { x: number; y: number }, e?: MouseEvent) {
   const wall = planStore.currentShapes.find((s) => s.id === wallId && s.type === "wall");
   if (!wall) return;
 
@@ -294,10 +294,17 @@ function handleWallClick(wallId: string, clickPoint: { x: number; y: number }) {
   const len = Math.hypot(dx, dy);
   if (len < 30) return;
 
+  let actualPoint = clickPoint;
+  if (e) {
+    actualPoint = screenToSvg(e.clientX, e.clientY);
+  } else if (actualPoint.x === 0 && actualPoint.y === 0) {
+    actualPoint = { x: (geom.x1 + geom.x2) / 2, y: (geom.y1 + geom.y2) / 2 };
+  }
+
   const ux = dx / len;
   const uy = dy / len;
   // Project click onto wall vector
-  const proj = (clickPoint.x - geom.x1) * ux + (clickPoint.y - geom.y1) * uy;
+  const proj = (actualPoint.x - geom.x1) * ux + (actualPoint.y - geom.y1) * uy;
   const offset = Math.max(10, Math.min(len - 45, Math.round(proj - 18)));
 
   const opType = editorStore.activeTool === "window" ? "window" : "door";
@@ -313,14 +320,13 @@ let dragMovementOccurred = false;
 let pendingSelectionEndpoint: string | null = null;
 
 function handleEndpointSelect(ep: Endpoint, e: MouseEvent) {
-  // If user clicked an endpoint that is already in multi-selection without Shift,
-  // do not immediately collapse the selection—wait until mouseup so they can drag all selected items!
-  if (editorStore.selectedEndpointIds.length > 1 && editorStore.isEndpointSelected(ep.id) && !e.shiftKey) {
+  console.log(`[SH_DEBUG] selectEndpoint id=${ep.id} shiftKey=${Boolean(e?.shiftKey)} before=[${editorStore.selectedEndpointIds.join(",")}]`);
+  if (editorStore.selectedEndpointIds.length > 1 && editorStore.isEndpointSelected(ep.id) && !e?.shiftKey) {
     pendingSelectionEndpoint = ep.id;
     return;
   }
   pendingSelectionEndpoint = null;
-  editorStore.selectEndpoint(ep.id, e.shiftKey);
+  editorStore.selectEndpoint(ep.id, Boolean(e?.shiftKey));
 }
 
 function handleEndpointDragStart(ep: Endpoint, e: MouseEvent) {
@@ -910,6 +916,7 @@ function onDrop(e: DragEvent) {
             class="sub-area-item"
             :class="{ selected: editorStore.selectedSubAreaId === sa.id }"
             @mousedown.stop="handleSubAreaDragStart(sa, $event)"
+            @click.stop="editorStore.selectSubArea(sa.id)"
             @dblclick.stop="startInlineRename('subarea', sa)"
             @contextmenu.prevent.stop="openContextMenu($event, 'subarea', sa)"
           >
@@ -977,8 +984,8 @@ function onDrop(e: DragEvent) {
             :endpoint="ep"
             :is-selected="editorStore.isEndpointSelected(ep.id)"
             :is-orphaned="isOrphaned(ep)"
-            @select="handleEndpointSelect"
-            @drag-start="handleEndpointDragStart"
+            @select="(ep, ev) => handleEndpointSelect(ep, ev)"
+            @drag-start="(ep, ev) => handleEndpointDragStart(ep, ev)"
             @contextmenu.prevent.stop="openContextMenu($event, 'endpoint', ep)"
           />
         </g>
