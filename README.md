@@ -5,7 +5,7 @@
 [![Playwright E2E Tests](https://github.com/tpickle-py/security-hawk/actions/workflows/e2e.yaml/badge.svg)](https://github.com/tpickle-py/security-hawk/actions/workflows/e2e.yaml)
 ![Tests](https://img.shields.io/badge/tests-74%20passed-success?style=for-the-badge&logo=pytest&logoColor=white)
 ![Coverage](https://img.shields.io/badge/coverage-pytest--cov%2074%25-informational?style=for-the-badge&logo=codecov&logoColor=white)
-![Version](https://img.shields.io/badge/version-v0.4.1-blue?style=for-the-badge&logo=semver&logoColor=white)
+![Version](https://img.shields.io/badge/version-v0.4.3-blue?style=for-the-badge&logo=semver&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue?style=for-the-badge&logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/django-5.2%2B-092E20?style=for-the-badge&logo=django&logoColor=white)
 ![Vue.js](https://img.shields.io/badge/vue.js-3.5%2B-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white)
@@ -21,14 +21,29 @@
 
 ---
 
+## 📸 Visual Demonstration & Walkthrough
+
+> Explore the full visual operations manual and screenshot library in the **[Demo & User Guide](demo/README.md)**.
+
+| Design Canvas & Camera/Motion FOV | 8-Handle Room Resizing & Context Menu |
+| :---: | :---: |
+| ![Design Canvas](demo/images/01_canvas_overview.png) | ![Room Resizing](demo/images/03_room_resizing_handles.png) |
+| **Endpoint Properties & FOV Depth** | **Right-Click Context Menu Actions** |
+| ![FOV Properties](demo/images/02_camera_fov_properties.png) | ![Context Menu](demo/images/04_room_context_menu.png) |
+
+---
+
 ## Highlights & Features
 
 - **Design Mode & Canvas**:
+  - **Camera & Motion Sensor Field-of-View (FOV) Cones**: Directional indigo coverage cones (`#818cf8`) for cameras and emerald PIR arcs (`#34d399`) for motion sensors with real-time aiming vector pointers.
   - **Background Upload**: Upload architectural floor plans (sanitized SVGs, PNG, JPEG, WebP).
   - **Scale Calibration**: Two-point real-world scale calibration in metres.
   - **Interactive Room & Zone Movement & 8-Handle Resizing**: Select rooms or sub-areas and move them freely or resize dynamically using 8 cardinal bounding box handles (`NW`, `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`).
+  - **Keyboard Element Deletion**: Press <kbd>Delete</kbd> or <kbd>Backspace</kbd> to delete selected endpoints, rooms, or subareas with full undo snapshotting.
+  - **Live Version Badging**: View active application version (`v0.4.3`) in the top brand header and settings modal.
   - **Command Bar**: CAD-style keyboard terminal (`WALL`, `ROOM`, `DOOR`, `WINDOW`, `SELECT`, `PAN`, `ZOOM`, `SCALE`, `SAVE`, `UNDO`, `REDO`, etc.) with autocomplete suggestions, command history, and a dockable / collapsible helper reference drawer.
-  - **Right-Click Context Menu**: Contextual right-click popup menu on canvas, endpoints, rooms, and walls providing instant property inspection, 90° rotations, duplication, area reassignment, cutout creation, and deletion.
+  - **Right-Click Context Menu**: Contextual right-click popup menu on canvas, endpoints, rooms, and walls providing instant property inspection, 90° rotations, duplication, style/color customization, cutout creation, and deletion.
   - **Box & Marquee Drag Selection**: Drag across empty canvas to select multiple entities at once, with `Shift` modifier support.
   - **Synchronized Multi-Move**: Drag any selected endpoint to move the entire selection across the canvas simultaneously.
   - **Version History**: Rolling 20-save version history with one-click restore.
