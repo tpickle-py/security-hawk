@@ -9,8 +9,6 @@ version across:
   - Dockerfile (io.hass.version label)
   - CHANGELOG.md (root)
   - security_hawk/CHANGELOG.md (app add-on mirror for repository-updater)
-  - ../ha-addons/security_hawk/config.yaml (HA catalog repo, if present)
-  - ../ha-addons/security_hawk/CHANGELOG.md (HA catalog repo, if present)
 """
 
 import argparse
@@ -43,7 +41,6 @@ def update_file(path: Path, pattern: str, replacement: str, dry_run: bool = Fals
 
 def update_changelog(
     repo_root: Path,
-    ha_addons_root: Path,
     new_ver: str,
     changelog_entry: str | None,
     dry_run: bool = False,
@@ -82,13 +79,6 @@ def update_changelog(
         app_changelog.write_text(content, encoding="utf-8")
     print(f"  [SYNCED] {app_changelog}")
 
-    # Synchronize CHANGELOG.md to ../ha-addons/security_hawk/ (if present)
-    ha_addon_changelog = ha_addons_root / "security_hawk" / "CHANGELOG.md"
-    if ha_addon_changelog.parent.is_dir():
-        if not dry_run:
-            ha_addon_changelog.write_text(content, encoding="utf-8")
-        print(f"  [SYNCED] {ha_addon_changelog}")
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -113,7 +103,6 @@ def main():
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
-    ha_addons_root = repo_root.parent / "ha-addons"
 
     # Current version
     current_ver = run_cmd(["uv", "version", "--short"], cwd=repo_root)
@@ -171,18 +160,8 @@ def main():
         args.dry_run,
     )
 
-    # 5. CHANGELOG.md (root, security_hawk/, and ../ha-addons/)
-    update_changelog(repo_root, ha_addons_root, new_ver, args.message, args.dry_run)
-
-    # 6. ha-addons/security_hawk/config.yaml (if present)
-    ha_addon_config = ha_addons_root / "security_hawk" / "config.yaml"
-    if ha_addon_config.is_file():
-        update_file(
-            ha_addon_config,
-            r'^(version:\s*)"[^"]+"',
-            rf'\g<1>"{new_ver}"',
-            args.dry_run,
-        )
+    # 5. CHANGELOG.md (root and security_hawk/)
+    update_changelog(repo_root, new_ver, args.message, args.dry_run)
 
     print(f"\nSuccessfully synchronized version to {new_ver}!")
     print("\nNext steps:")

@@ -118,13 +118,14 @@ python3 scripts/bump_version.py patch --dry-run
 1. Calls `uv version --bump <target>`, updating `pyproject.toml` and `uv.lock`.
 2. Synchronizes the new version string across:
    - `config.yaml` (root add-on manifest)
-   - `security_hawk/config.yaml` (app subdir manifest for updater)
+   - `security_hawk/config.yaml` (app subdir manifest consumed by repository-updater)
    - `frontend/package.json`
    - `Dockerfile` (`io.hass.version` label)
    - `CHANGELOG.md` (prepends new version heading with timestamp)
    - `security_hawk/CHANGELOG.md` (app mirror consumed by repository-updater)
-   - `../ha-addons/security_hawk/config.yaml` (if present in adjacent directory)
-   - `../ha-addons/security_hawk/CHANGELOG.md` (if present in adjacent directory)
+
+> [!NOTE]
+> `ha-addons` is updated automatically in GitHub Actions by `repository-updater` on release; `bump_version.py` deliberately does not touch `../ha-addons/`.
 
 ### Publishing a Release:
 ```bash
@@ -135,18 +136,13 @@ git commit -m "chore(release): vX.Y.Z"
 # 2. Tag and push tag
 git tag vX.Y.Z
 git push origin master && git push origin vX.Y.Z
-
-# 3. If ../ha-addons was modified:
-cd ../ha-addons
-git add security_hawk/config.yaml security_hawk/CHANGELOG.md
-git commit -m "chore: bump security_hawk to X.Y.Z"
-git push origin main
 ```
 
-4. **Publish GitHub Release**:
+3. **Publish GitHub Release**:
    - Go to `https://github.com/tpickle-py/security-hawk/releases/new`.
    - Select tag `vX.Y.Z`, enter title `vX.Y.Z`, paste changelog notes, and click **Publish release**.
-   - This triggers `.github/workflows/deploy.yaml` which builds the multi-arch GHCR containers and dispatches the update to `ha-addons`.
+   - This triggers `.github/workflows/deploy.yaml` which builds the multi-arch GHCR containers and dispatches the `update` event to `ha-addons`.
+   - `ha-addons/.github/workflows/repository-updater.yaml` automatically synchronizes the add-on manifest, documentation, changelog, and README badges in the catalog repository.
 
 ---
 
