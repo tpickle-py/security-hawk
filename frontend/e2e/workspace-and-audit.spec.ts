@@ -3,6 +3,7 @@ import { setupMockApi } from "./helpers/mockApi";
 
 test.describe("Workspace Presets, Panel Docking & Security Audit E2E", () => {
   test.beforeEach(async ({ page }) => {
+    page.on("console", (msg) => console.log("E2E_CONSOLE:", msg.text()));
     await setupMockApi(page);
     await page.goto("/");
   });

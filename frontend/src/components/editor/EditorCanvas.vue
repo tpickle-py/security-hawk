@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { useEditorStore, VIEWPORT_CONFIGS } from "@/stores/editorStore";
 import { usePlanStore } from "@/stores/planStore";
 import { useEntityStore } from "@/stores/entityStore";
@@ -9,6 +9,7 @@ import type { Endpoint, Shape, SubArea, RoomGeometry, WallGeometry } from "@/typ
 import SvgDefs from "@/components/shared/SvgDefs.vue";
 import BackgroundLayer from "@/components/editor/BackgroundLayer.vue";
 import EndpointIcon from "@/components/editor/EndpointIcon.vue";
+import EndpointCoverage from "@/components/editor/EndpointCoverage.vue";
 import ScaleTool from "@/components/editor/ScaleTool.vue";
 import ShapesLayer from "@/components/editor/ShapesLayer.vue";
 import EditorContextMenu, { type ContextMenuState } from "@/components/editor/EditorContextMenu.vue";
@@ -395,7 +396,6 @@ let dragMovementOccurred = false;
 let pendingSelectionEndpoint: string | null = null;
 
 function handleEndpointSelect(ep: Endpoint, e: MouseEvent) {
-  console.log(`[SH_DEBUG] selectEndpoint id=${ep.id} shiftKey=${Boolean(e?.shiftKey)} before=[${editorStore.selectedEndpointIds.join(",")}]`);
   if (editorStore.selectedEndpointIds.length > 1 && editorStore.isEndpointSelected(ep.id) && !e?.shiftKey) {
     pendingSelectionEndpoint = ep.id;
     return;
@@ -546,6 +546,17 @@ function handleRoomShapeDragStart(shape: Shape, e: MouseEvent) {
 
   window.addEventListener("mousemove", onDocMouseMove);
   window.addEventListener("mouseup", onDocMouseUp);
+}
+
+function handleSelectedRoomDragStart(e: MouseEvent) {
+  if (!selectedRoomBounds.value || e.button !== 0 || editorStore.activeTool !== "select") return;
+  if (selectedRoomBounds.value.type === "subarea") {
+    const sa = planStore.currentSubAreas.find((s) => s.id === selectedRoomBounds.value?.id);
+    if (sa) handleSubAreaDragStart(sa, e);
+  } else if (selectedRoomBounds.value.type === "room") {
+    const sh = planStore.currentShapes.find((s) => s.id === selectedRoomBounds.value?.id);
+    if (sh) handleRoomShapeDragStart(sh, e);
+  }
 }
 
 // Room & Sub-Area Bounding Box & 8 Resize Handles
@@ -709,6 +720,15 @@ const contextMenuState = ref<ContextMenuState>({
 
 function openContextMenu(e: MouseEvent, type: any, target: any) {
   e.preventDefault();
+  if (target) {
+    if ("entity_id" in target) {
+      editorStore.selectEndpoint(target.id);
+    } else if ("width" in target && "height" in target) {
+      editorStore.selectSubArea(target.id);
+    } else if (target.type) {
+      editorStore.selectShape(target.id);
+    }
+  }
   contextMenuState.value = {
     show: true,
     x: e.clientX,
@@ -721,6 +741,17 @@ function openContextMenu(e: MouseEvent, type: any, target: any) {
 function handleContextMenuAction(actionName: string) {
   const target = contextMenuState.value.target as any;
   switch (actionName) {
+    case "open-properties":
+      if (target) {
+        if ("entity_id" in target) {
+          editorStore.selectEndpoint(target.id);
+        } else if ("width" in target && "height" in target) {
+          editorStore.selectSubArea(target.id);
+        } else if (target.type) {
+          editorStore.selectShape(target.id);
+        }
+      }
+      break;
     case "rotate-cw":
       if (target && "rotation" in target) {
         planStore.updateEndpoint(target.id, { rotation: ((target.rotation || 0) + 90) % 360 });
@@ -737,15 +768,98 @@ function handleContextMenuAction(actionName: string) {
       }
       break;
     case "duplicate":
-      if (target && "entity_id" in target) {
-        const dup: Endpoint = {
-          ...target,
-          id: "ep_" + Math.random().toString(36).substring(2, 9),
-          x: target.x + 25,
-          y: target.y + 25,
-        };
-        planStore.addEndpoint(dup);
-        editorStore.selectEndpoint(dup.id);
+      if (target) {
+        if ("entity_id" in target) {
+          const dup: Endpoint = {
+            ...target,
+            id: "ep_" + Math.random().toString(36).substring(2, 9),
+            x: target.x + 25,
+            y: target.y + 25,
+          };
+          planStore.addEndpoint(dup);
+          editorStore.selectEndpoint(dup.id);
+        } else if ("width" in target && "height" in target) {
+          const dup: SubArea = {
+            ...target,
+            id: "sa_" + Math.random().toString(36).substring(2, 9),
+            name: `${target.name || "Room"} (Copy)`,
+            x: target.x + 30,
+            y: target.y + 30,
+          };
+          planStore.addSubArea(dup);
+          editorStore.selectSubArea(dup.id);
+        } else if (target.type === "room") {
+          const geom = target.geometry as RoomGeometry;
+          const newPoints = (geom.points || []).map(([px, py]) => [px + 30, py + 30] as [number, number]);
+          const dup: Shape = {
+            ...target,
+            id: "rm_" + Math.random().toString(36).substring(2, 9),
+            geometry: {
+              ...geom,
+              name: `${geom.name || "Room"} (Copy)`,
+              points: newPoints,
+            },
+          };
+          planStore.addShape(dup);
+          editorStore.selectShape(dup.id);
+        } else if (target.type === "wall") {
+          const geom = target.geometry as WallGeometry;
+          const dup: Shape = {
+            ...target,
+            id: "wall_" + Math.random().toString(36).substring(2, 9),
+            geometry: {
+              ...geom,
+              x1: geom.x1 + 30,
+              y1: geom.y1 + 30,
+              x2: geom.x2 + 30,
+              y2: geom.y2 + 30,
+              openings: [],
+            },
+          };
+          planStore.addShape(dup);
+          editorStore.selectShape(dup.id);
+        } else if (target.type === "label") {
+          const geom = target.geometry as any;
+          const dup: Shape = {
+            ...target,
+            id: "lbl_" + Math.random().toString(36).substring(2, 9),
+            geometry: {
+              ...geom,
+              x: (geom.x || 0) + 30,
+              y: (geom.y || 0) + 30,
+            },
+          };
+          planStore.addShape(dup);
+          editorStore.selectShape(dup.id);
+        }
+      }
+      break;
+    case "change-color":
+      if (target) {
+        if ("width" in target && "height" in target) {
+          const newColor = prompt("Enter room background color (hex or rgba):", target.color || "rgba(99, 102, 241, 0.12)");
+          if (newColor && newColor.trim()) {
+            planStore.updateSubArea(target.id, { color: newColor.trim() });
+          }
+        } else if (target.type === "room") {
+          const newColor = prompt("Enter room fill color (hex or rgba):", (target.style?.fill as string) || "rgba(99, 102, 241, 0.12)");
+          if (newColor && newColor.trim()) {
+            planStore.updateShape(target.id, {
+              style: { ...(target.style || {}), fill: newColor.trim() },
+            });
+          }
+        }
+      }
+      break;
+    case "edit-label":
+      if (target && target.type === "label") {
+        const geom = target.geometry as any;
+        const newText = prompt("Edit label text:", geom.text || "");
+        if (newText !== null && newText.trim()) {
+          planStore.updateShape(target.id, {
+            geometry: { ...geom, text: newText.trim() },
+          });
+        }
       }
       break;
     case "delete":
@@ -816,6 +930,59 @@ function handleContextMenuAction(actionName: string) {
       break;
   }
 }
+
+// Global Keyboard Delete Support in Design View
+function handleDeleteKey(e: KeyboardEvent) {
+  if (editorStore.mode !== "design") return;
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+
+  const activeEl = document.activeElement;
+  if (
+    activeEl &&
+    (activeEl.tagName === "INPUT" ||
+      activeEl.tagName === "TEXTAREA" ||
+      activeEl.tagName === "SELECT" ||
+      (activeEl as HTMLElement).isContentEditable)
+  ) {
+    return;
+  }
+
+  let deletedAny = false;
+  planStore.snapshotBeforeMutation();
+
+  if (editorStore.selectedEndpointIds.length > 0) {
+    for (const id of [...editorStore.selectedEndpointIds]) {
+      planStore.removeEndpoint(id);
+    }
+    editorStore.clearSelection();
+    deletedAny = true;
+  }
+
+  if (editorStore.selectedShapeId) {
+    planStore.removeShape(editorStore.selectedShapeId);
+    editorStore.selectedShapeId = null;
+    deletedAny = true;
+  }
+
+  if (editorStore.selectedSubAreaId) {
+    planStore.removeSubArea(editorStore.selectedSubAreaId);
+    editorStore.selectedSubAreaId = null;
+    deletedAny = true;
+  }
+
+  if (deletedAny) {
+    e.preventDefault();
+    planStore.markDirtyAndAutosave();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleDeleteKey);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleDeleteKey);
+});
 
 // Viewport Simulator State
 const activeViewportConfig = computed(() => {
@@ -1031,17 +1198,19 @@ function onDrop(e: DragEvent) {
 
         <!-- Selected Room / SubArea Bounding Box & 8 Resize Handles -->
         <g v-if="selectedRoomBounds" class="room-resize-overlay">
-          <!-- Bounding dashed outline with corner glow -->
+          <!-- Draggable bounding border for moving room location -->
           <rect
-            :x="selectedRoomBounds.x - 2"
-            :y="selectedRoomBounds.y - 2"
-            :width="selectedRoomBounds.width + 4"
-            :height="selectedRoomBounds.height + 4"
+            :x="selectedRoomBounds.x - 4"
+            :y="selectedRoomBounds.y - 4"
+            :width="selectedRoomBounds.width + 8"
+            :height="selectedRoomBounds.height + 8"
             fill="none"
+            pointer-events="stroke"
             stroke="#6366f1"
-            stroke-width="1.5"
+            stroke-width="3"
             stroke-dasharray="4 3"
-            pointer-events="none"
+            class="room-drag-border"
+            @mousedown.stop="handleSelectedRoomDragStart($event)"
           />
           <!-- Dimension pill on top -->
           <g :transform="`translate(${selectedRoomBounds.x + selectedRoomBounds.width / 2}, ${selectedRoomBounds.y - 12})`" pointer-events="none">
@@ -1069,6 +1238,16 @@ function onDrop(e: DragEvent) {
 
         <!-- Scale Calibration Layer -->
         <ScaleTool />
+
+        <!-- Endpoint Coverage FOV Cones Layer (rendered behind endpoints, pointer-events: none) -->
+        <g class="endpoints-coverage-layer" pointer-events="none">
+          <EndpointCoverage
+            v-for="ep in planStore.currentEndpoints"
+            :key="'cov-' + ep.id"
+            :endpoint="ep"
+            :is-selected="editorStore.isEndpointSelected(ep.id)"
+          />
+        </g>
 
         <!-- Placed Endpoints -->
         <g class="endpoints-layer">
@@ -1265,6 +1444,10 @@ function onDrop(e: DragEvent) {
   filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4));
 }
 
+.room-drag-border {
+  cursor: move;
+}
+
 /* Floating Viewport Preview Banner */
 .viewport-preview-pill {
   position: absolute;
@@ -1367,5 +1550,14 @@ function onDrop(e: DragEvent) {
 .inline-rename-input:focus {
   border-color: #818cf8;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), 0 0 12px rgba(129, 140, 248, 0.6);
+}
+
+.sub-area-item {
+  cursor: move;
+  user-select: none;
+}
+
+.sub-area-item:hover rect {
+  filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4));
 }
 </style>

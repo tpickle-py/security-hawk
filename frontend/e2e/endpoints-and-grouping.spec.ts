@@ -61,7 +61,7 @@ test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
     await propPanel.locator("button").filter({ hasText: "Group as Single Unit" }).click();
 
     // Endpoints now display 'G' badge in SVG
-    const groupBadges = page.locator(".endpoint-icon-group text").filter({ hasText: "G" });
+    const groupBadges = page.locator(".endpoint-icon-group text").filter({ hasText: /^G$/ });
     await expect(groupBadges).toHaveCount(2);
 
     // Contextual chip in CAD command line should now show 'Ungroup' when opened
@@ -80,13 +80,13 @@ test.describe("Endpoints Dragging, Moving & Grouping Workflows", () => {
     await propPanel.locator("button").filter({ hasText: "Group as Single Unit" }).click();
 
     // Verify badges appeared
-    await expect(page.locator(".endpoint-icon-group text").filter({ hasText: "G" })).toHaveCount(2);
+    await expect(page.locator(".endpoint-icon-group text").filter({ hasText: /^G$/ })).toHaveCount(2);
 
     // Click Ungroup
     await propPanel.locator("button").filter({ hasText: "Ungroup Selected Items" }).click();
 
     // Badges should be removed
-    await expect(page.locator(".endpoint-icon-group text").filter({ hasText: "G" })).toHaveCount(0);
+    await expect(page.locator(".endpoint-icon-group text").filter({ hasText: /^G$/ })).toHaveCount(0);
   });
 
   test("Moving an endpoint updates its position", async ({ page }) => {

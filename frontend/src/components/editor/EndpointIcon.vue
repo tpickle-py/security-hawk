@@ -18,8 +18,6 @@ const emit = defineEmits<{
   (e: "drag-start", endpoint: Endpoint, event: MouseEvent): void;
 }>();
 
-
-
 const iconHref = computed(() => {
   switch (props.endpoint.type) {
     case "motion":
@@ -47,62 +45,68 @@ function handleMouseDown(e: MouseEvent) {
   <g
     class="endpoint-icon-group"
     :class="{ selected: isSelected, grouped: Boolean(endpoint.group_id) }"
-    :transform="`translate(${endpoint.x}, ${endpoint.y}) rotate(${endpoint.rotation || 0})`"
+    :transform="`translate(${endpoint.x}, ${endpoint.y})`"
     @mousedown.stop="handleMouseDown"
+    @click.stop
   >
-    <!-- Invisible round hit area for reliable selection -->
-    <circle cx="0" cy="0" r="18" fill="transparent" class="endpoint-hitbox" />
+    <!-- Full hit area encompassing icon, label, and gap -->
+    <rect x="-30" y="-22" width="60" height="58" rx="8" fill="rgba(0,0,0,0.001)" pointer-events="all" class="endpoint-hitbox" />
 
-    <!-- Selection highlight circle -->
-    <circle
-      v-if="isSelected"
-      cx="0"
-      cy="0"
-      r="25"
-      fill="rgba(99, 102, 241, 0.2)"
-      stroke="#6366f1"
-      stroke-width="2.5"
-      stroke-dasharray="4 2"
-    />
+    <!-- Rotatable icon and badge group -->
+    <g :transform="endpoint.rotation ? `rotate(${endpoint.rotation})` : undefined">
+      <!-- Dedicated round hit area for reliable selection -->
+      <circle cx="0" cy="0" r="18" fill="rgba(0,0,0,0.001)" pointer-events="all" />
 
-    <!-- Icon reference -->
-    <use :href="iconHref" />
+      <!-- Selection highlight circle -->
+      <circle
+        v-if="isSelected"
+        cx="0"
+        cy="0"
+        r="25"
+        fill="rgba(99, 102, 241, 0.2)"
+        stroke="#6366f1"
+        stroke-width="2.5"
+        stroke-dasharray="4 2"
+      />
 
-    <!-- Group unit badge -->
-    <g v-if="endpoint.group_name || endpoint.group_id" transform="translate(11, -12)">
-      <circle cx="0" cy="0" r="7" fill="#6366f1" stroke="#ffffff" stroke-width="1.5" />
-      <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="8" font-weight="bold">G</text>
+      <!-- Icon reference -->
+      <use :href="iconHref" />
+
+      <!-- Group unit badge -->
+      <g v-if="endpoint.group_name || endpoint.group_id" transform="translate(11, -12)">
+        <circle cx="0" cy="0" r="7" fill="#6366f1" stroke="#ffffff" stroke-width="1.5" />
+        <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="8" font-weight="bold">G</text>
+      </g>
+
+      <!-- Nested entity indicator -->
+      <g v-if="endpoint.parent_id" transform="translate(-11, -12)">
+        <circle cx="0" cy="0" r="5" fill="#f59e0b" stroke="#ffffff" stroke-width="1" />
+      </g>
+
+      <!-- Companion sensors badge indicator -->
+      <g v-if="endpoint.companions && endpoint.companions.length > 0" transform="translate(-12, 10)">
+        <circle cx="0" cy="0" r="5.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+        <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="7" font-weight="bold">{{ endpoint.companions.length }}</text>
+      </g>
+
+      <!-- Linked cameras badge indicator -->
+      <g v-if="endpoint.cameras && endpoint.cameras.length > 0" transform="translate(12, 10)">
+        <circle cx="0" cy="0" r="5.5" fill="#3b82f6" stroke="#ffffff" stroke-width="1" />
+        <text x="0" y="0.5" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="7" font-weight="bold">C</text>
+      </g>
+
+      <!-- Orphaned / missing Home Assistant entity warning -->
+      <g v-if="isOrphaned" transform="translate(0, -18)">
+        <circle cx="0" cy="0" r="7" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" />
+        <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="9" font-weight="bold">!</text>
+      </g>
     </g>
 
-    <!-- Nested entity indicator -->
-    <g v-if="endpoint.parent_id" transform="translate(-11, -12)">
-      <circle cx="0" cy="0" r="5" fill="#f59e0b" stroke="#ffffff" stroke-width="1" />
-    </g>
-
-    <!-- Companion sensors badge indicator -->
-    <g v-if="endpoint.companions && endpoint.companions.length > 0" transform="translate(-12, 10)">
-      <circle cx="0" cy="0" r="5.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
-      <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="7" font-weight="bold">{{ endpoint.companions.length }}</text>
-    </g>
-
-    <!-- Linked cameras badge indicator -->
-    <g v-if="endpoint.cameras && endpoint.cameras.length > 0" transform="translate(12, 10)">
-      <circle cx="0" cy="0" r="5.5" fill="#3b82f6" stroke="#ffffff" stroke-width="1" />
-      <text x="0" y="0.5" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="7" font-weight="bold">C</text>
-    </g>
-
-    <!-- Orphaned / missing Home Assistant entity warning -->
-    <g v-if="isOrphaned" transform="translate(0, -18)">
-      <circle cx="0" cy="0" r="7" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" />
-      <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="9" font-weight="bold">!</text>
-    </g>
-
-    <!-- Label -->
+    <!-- Upright Label (always horizontal below icon) -->
     <text
       y="28"
       text-anchor="middle"
       class="endpoint-label"
-      :transform="endpoint.rotation ? `rotate(${-endpoint.rotation})` : undefined"
     >
       {{ endpoint.label || endpoint.entity_id.split('.')[1] }}
     </text>
@@ -130,5 +134,10 @@ function handleMouseDown(e: MouseEvent) {
 
 .endpoint-icon-group:hover circle:not([stroke]) {
   filter: drop-shadow(0 0 6px var(--accent-primary-glow));
+}
+
+.editor-coverage-cone {
+  pointer-events: none;
+  transition: all 0.2s ease-out;
 }
 </style>

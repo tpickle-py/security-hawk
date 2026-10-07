@@ -1047,7 +1047,7 @@ onUnmounted(() => {
 /* Minimized Floating Pill */
 .props-minimized-pill {
   position: fixed;
-  z-index: 175;
+  z-index: 250;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1064,12 +1064,12 @@ onUnmounted(() => {
 
 .props-minimized-pill.dock-right {
   right: 20px;
-  top: 72px;
+  top: 120px;
 }
 
 .props-minimized-pill.dock-left {
   left: 20px;
-  top: 72px;
+  top: 120px;
 }
 
 .props-minimized-pill:hover {

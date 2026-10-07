@@ -33,6 +33,7 @@ const showNewPlanModal = ref(false);
 const showSettingsModal = ref(false);
 const settingsInitialTab = ref<"behaviors" | "mqtt" | "helpers" | "notifications" | "kiosk">("behaviors");
 const newPlanName = ref("");
+const appVersion = ref(typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.4.2");
 
 function openKioskTab() {
   settingsInitialTab.value = "kiosk";
@@ -99,6 +100,7 @@ onMounted(() => {
             <path fill="#6366f1" d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 4.18l6 3.33v3.74c0 3.73-2.55 7.21-6 8.35-3.45-1.14-6-4.62-6-8.35v-3.74l6-3.33z"/>
           </svg>
           <span class="app-title">Security Hawk</span>
+          <span class="app-version-badge" title="Installed Application Version">v{{ appVersion }}</span>
         </div>
 
         <div class="plan-selector">
@@ -272,6 +274,19 @@ onMounted(() => {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.app-version-badge {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  letter-spacing: 0.5px;
+  line-height: 1.2;
 }
 
 .plan-selector {

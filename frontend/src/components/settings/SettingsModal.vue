@@ -321,6 +321,7 @@ async function handleSyncHelpers() {
     isSyncingHelpers.value = false;
   }
 }
+const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.4.2";
 </script>
 
 <template>
@@ -332,6 +333,7 @@ async function handleSyncHelpers() {
           <div class="title-row">
             <span class="header-icon">⚙️</span>
             <h2>Application & Integration Settings</h2>
+            <span class="version-tag app-version-tag">v{{ appVersion }}</span>
           </div>
           <p class="subtitle">
             Configure system behaviors, MQTT information store, and Home Assistant synthetic helpers.
@@ -980,6 +982,18 @@ async function handleSyncHelpers() {
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
+}
+
+.version-tag {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.18);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  margin-left: 8px;
 }
 
 .subtitle {

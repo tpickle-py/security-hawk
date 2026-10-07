@@ -172,6 +172,9 @@ function handleRoomEdgeClick(shape: Shape, edgeIndex: number, e: MouseEvent) {
     return;
   }
   emit("select-shape", shape.id);
+  if (editorStore.activeTool === "select" && e.button === 0) {
+    emit("room-drag-start", shape, e);
+  }
 }
 </script>
 

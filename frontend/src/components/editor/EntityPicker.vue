@@ -449,7 +449,7 @@ onUnmounted(() => {
     v-if="isMinimized"
     :class="['entity-minimized-pill', 'glass-panel', `dock-${dockMode}`]"
     :style="dockMode === 'float' ? { left: `${floatPos.x}px`, top: `${floatPos.y}px` } : undefined"
-    @mousedown="startHeaderDrag"
+    @mousedown="startHeaderDrag($event)"
     @click="toggleMinimize"
     title="Click to restore Home Assistant Entities panel (drag to move)"
   >
@@ -1030,7 +1030,7 @@ onUnmounted(() => {
 /* Minimized Floating Pill */
 .entity-minimized-pill {
   position: fixed;
-  z-index: 175;
+  z-index: 250;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1047,12 +1047,12 @@ onUnmounted(() => {
 
 .entity-minimized-pill.dock-left {
   left: 20px;
-  top: 72px;
+  top: 120px;
 }
 
 .entity-minimized-pill.dock-right {
   right: 20px;
-  top: 72px;
+  top: 120px;
 }
 
 .entity-minimized-pill:hover {
