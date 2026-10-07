@@ -186,21 +186,133 @@
 
 ---
 
-## Installation & Running
+## 🏠 Home Assistant Installation & Usage Guide
 
-### As a Home Assistant App
+Security Hawk is distributed as an official Home Assistant Add-on with native Supervisor, Ingress, and WebSocket integration.
 
-1. Add this repository to your Home Assistant Add-on / App Store.
-2. Click **Install**.
-3. In the configuration tab, configure kiosk options if TV display is desired:
-   ```yaml
-   kiosk_enabled: true
-   kiosk_port: 8100
-   kiosk_token: "your-secure-token"
-   default_view: "overview"
-   quiet_return_seconds: 120
+### 1. Installation via Add-on Store
+
+1. In Home Assistant, navigate to **Settings** &rarr; **Add-ons** &rarr; **Add-on Store**.
+2. Click the three dots in the top right &rarr; **Repositories**.
+3. Add the Security Hawk catalog repository URL:
+   ```text
+   https://github.com/tpickle-py/ha-addons
    ```
-4. Click **Start** and then **Open Web UI**.
+4. Click **Add** &rarr; **Close**.
+5. Find **Security Hawk** in the store and click **Install**.
+6. Toggle **Show in sidebar** to enable the direct sidebar shortcut (`mdi:shield-eye`).
+7. Click **Start**, then click **Open Web UI** to launch the dashboard inside Home Assistant Ingress.
+
+### 2. Add-on Configuration Options
+
+In the add-on **Configuration** tab in Home Assistant, customize your environment:
+
+```yaml
+# Kiosk & TV Wall Display
+kiosk_enabled: true
+kiosk_port: 8100
+kiosk_token: "your-secret-token"
+default_view: "overview"
+quiet_return_seconds: 120
+
+# Model Context Protocol (MCP) AI Tools
+mcp_access_level: "full_access"   # read_only | design_only | rules_only | full_access | disabled
+mcp_api_key: ""                   # Optional secret API key for external agents
+
+# Filter Noisy Entities
+ignored_domains:
+  - update
+  - sun
+ignored_entities:
+  - binary_sensor.test_dummy
+```
+
+### 3. TV & Wall Kiosk Display (Route B Kiosk)
+
+Security Hawk includes a dedicated, lightweight Kiosk mode designed for unattended 24/7 operation on wall tablets, Google TV, Android TV, and Raspberry Pi displays:
+
+- **Access URL**:
+  ```text
+  http://<YOUR_HOME_ASSISTANT_IP>:8100/kiosk/?token=<YOUR_KIOSK_TOKEN>
+  ```
+- **Features**:
+  - **Read-Only Enforcement**: Blocks accidental editing or layout corruption on shared displays.
+  - **TV Remote (D-Pad) Navigation**: Use Google TV or Apple TV remote arrows to jump between sensors; press `OK` to open live camera feeds, and `Back` to return to the floor plan.
+  - **Quiet Auto-Return**: Automatically returns to the global overview after a configurable idle period (e.g. 120 seconds).
+  - **Auto-Reconnect**: Seamlessly recovers and resumes state broadcasts during network or Home Assistant Core restarts.
+
+---
+
+## 🤖 Model Context Protocol (MCP) AI Tools Server
+
+Security Hawk features a built-in **Model Context Protocol (MCP)** server that exposes your smart home floor plan, entity coverage, and automation engine to AI agents (such as **Claude Desktop**, **Antigravity**, **Cursor**, or custom LLM orchestrators).
+
+```
+┌─────────────────────────┐         JSON-RPC 2.0 / REST          ┌───────────────────────────┐
+│       AI Agent          │ ───────────────────────────────────> │  Security Hawk MCP Server │
+│ (Claude / Antigravity)  │ <─────────────────────────────────── │       (backend/mcp/)      │
+└─────────────────────────┘      Floor Plan & Security Audit     └─────────────┬─────────────┘
+                                                                               │
+                                                                               ▼
+                                                                 ┌───────────────────────────┐
+                                                                 │   Home Assistant State    │
+                                                                 │   & Floor Plan Geometry   │
+                                                                 └───────────────────────────┘
+```
+
+### 1. Protocol Endpoints
+
+- **JSON-RPC 2.0 Endpoint**: `POST /api/mcp/rpc` (implements standard MCP `tools/list` and `tools/call`).
+- **Direct REST Tools Endpoint**: `GET /api/mcp/tools` (introspection) and `POST /api/mcp/execute` (execution).
+- **Status & Discovery**: `GET /api/mcp/status`.
+
+### 2. Available AI MCP Tools
+
+| Tool Name | Description | Access Level Required |
+| :--- | :--- | :--- |
+| `get_floor_plan` | Retrieves complete floor plan geometry, placed entities, and active states. | `read_only` |
+| `list_entities` | Queries registered Home Assistant entities, domains, and assigned areas. | `read_only` |
+| `validate_security_coverage` | Performs an AI coverage audit, detecting blind spots and perimeter gaps. | `read_only` |
+| `create_room` | Programmatically creates a new architectural room or nested sub-area. | `design_only` / `full_access` |
+| `update_room` | Modifies room dimensions, polygon vertices, color styling, or area bindings. | `design_only` / `full_access` |
+| `create_compound_rule` | Synthesizes multi-condition compound automation rules and actions. | `rules_only` / `full_access` |
+
+### 3. Granular Access Control Tiers
+
+Configurable via **Settings** &rarr; **MCP Settings** or `config.yaml`:
+- **`read_only`**: Inspect layouts, query sensor telemetry, and check coverage recommendations.
+- **`design_only`**: Read access plus creating and modifying rooms, sub-areas, and walls.
+- **`rules_only`**: Read access plus creating and editing compound automation rules.
+- **`full_access`**: Unrestricted access across design, telemetry, and rule synthesis.
+- **`disabled`**: Rejects all incoming MCP requests with `403 Forbidden`.
+
+### 4. Claude Desktop & AI Agent Configuration
+
+To connect **Claude Desktop** to Security Hawk, add the following to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "security-hawk": {
+      "url": "http://<YOUR_HOME_ASSISTANT_IP>:8123/api/hassio_ingress/<SECURITY_HAWK_INGRESS_SLUG>/api/mcp/rpc",
+      "headers": {
+        "Authorization": "Bearer <YOUR_SUPERVISOR_OR_MCP_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+### 5. Sensitive Data Redaction & Security
+
+Security Hawk automatically sanitizes all MCP tool responses before transmission:
+- IPv4/IPv6 addresses are masked with `[REDACTED_IP]`.
+- Long-Lived Access Tokens and Bearer tokens are masked with `[REDACTED_TOKEN]`.
+- System credentials and sensitive paths are stripped from tool outputs.
+
+---
+
+## Installation & Running
 
 ### Local Development
 
