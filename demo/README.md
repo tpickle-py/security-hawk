@@ -75,3 +75,17 @@ Access settings by clicking the gear icon (<kbd>⚙️</kbd>) in the header.
 - **Model Context Protocol (MCP)**: Configure AI agent integration levels (`read_only`, `design_only`, `rules_only`, `full_access`).
 - **Ignored Entities**: Hide noisy entities from the entity picker.
 - **Kiosk & TV Display**: Generate read-only wall tablet links with PIN authentication and quiet return timeouts.
+
+---
+
+## 6. Kiosk Mode & Unattended Wall Displays
+
+Direct Kiosk mode loads a dedicated, full-screen **Live View** interface designed for wall tablets, smart TVs, and Google TV / Apple TV displays with zero editing controls or toolbars.
+
+![Kiosk Mode Live View](images/06_kiosk_live_view.png)
+
+### Kiosk Features
+- **Pure Live View**: Renders real-time sensor states, camera streams, and motion alerts with no toolbars, entity pickers, or CAD command prompts.
+- **Minimal Status Pill**: Centered floating pill displaying building/floor title (`HAWK Ground Floor`) and active connected viewer count (`👁️ 1`).
+- **Quiet Auto-Return**: Automatically reverts to the global overview after a configurable period of inactivity (default: 120s).
+- **TV Remote Navigation**: D-pad navigation controls allowing TV remotes to jump between interactive sensors and view live camera feeds.

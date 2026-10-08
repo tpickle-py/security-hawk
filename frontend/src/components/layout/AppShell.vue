@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import { isKioskMode } from "@/router";
 import { usePlanStore } from "@/stores/planStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { useLiveStore } from "@/stores/liveStore";
@@ -81,7 +83,13 @@ async function handleSwitchPlan(e: Event) {
   }
 }
 
+const router = useRouter();
+
 onMounted(() => {
+  if (isKioskMode()) {
+    router.replace({ name: "kiosk" });
+    return;
+  }
   editorStore.setWorkspacePreset("mapping");
   loadPlans();
 });

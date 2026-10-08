@@ -36,8 +36,8 @@ function handleUserActivity() {
 
 onMounted(async () => {
   try {
-    // Determine plan to load
-    let planId = route.params.planId as string;
+    // Determine plan to load (support params, query params, or first plan)
+    let planId = (route.params.planId as string) || (route.query.planId as string) || (route.query.plan_id as string);
     if (!planId) {
       const list = await api.listPlans();
       if (list.plans.length > 0) {

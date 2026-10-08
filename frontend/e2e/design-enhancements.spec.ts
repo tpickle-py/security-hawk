@@ -99,4 +99,25 @@ test.describe("Design Mode Enhancements & New Features E2E", () => {
     // New duplicated subarea exists
     await expect(page.locator(".sub-area-item")).toHaveCount(initialSubAreasCount + 1);
   });
+
+  test("Kiosk mode renders only Live View and excludes Design toolbar, Entity Picker, and Command Bar", async ({ page }) => {
+    // Navigate to Kiosk route
+    await page.goto("/#/kiosk");
+
+    // Kiosk container and LiveCanvas are active
+    const kioskContainer = page.locator(".kiosk-container");
+    await expect(kioskContainer).toBeVisible();
+
+    const liveCanvas = page.locator(".live-container");
+    await expect(liveCanvas).toBeVisible();
+
+    const tvStatusPill = page.locator(".kiosk-status-pill");
+    await expect(tvStatusPill).toBeVisible();
+    await expect(tvStatusPill).toContainText("HAWK");
+
+    // Verify Design tools, Entity Picker, and Command Bar are NOT rendered
+    await expect(page.locator(".entity-picker-panel")).toHaveCount(0);
+    await expect(page.locator(".cad-command-bar")).toHaveCount(0);
+    await expect(page.locator(".toolbar-container")).toHaveCount(0);
+  });
 });

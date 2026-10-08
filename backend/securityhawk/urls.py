@@ -13,12 +13,16 @@ def spa_view(request, *args, **kwargs):
     try:
         with open(index_path) as f:
             content = f.read()
-        # Inject the ingress path so the Vue app can construct correct URLs
+        # Inject the ingress path and kiosk status so the Vue app can construct correct URLs and mode
         ingress_path = getattr(request, "ingress_path", "")
-        content = content.replace(
-            "</head>",
-            f'<script>window.__INGRESS_PATH__ = "{ingress_path}";</script></head>',
+        is_kiosk = getattr(request, "is_kiosk", False)
+        injected_script = (
+            f'<script>'
+            f'window.__INGRESS_PATH__ = "{ingress_path}"; '
+            f'window.__IS_KIOSK__ = {"true" if is_kiosk else "false"};'
+            f'</script></head>'
         )
+        content = content.replace("</head>", injected_script)
         from django.http import HttpResponse
 
         return HttpResponse(content, content_type="text/html")
